@@ -1,0 +1,143 @@
+// packages/database/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+enum Role {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+  OWNER
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+// --- MODELOS ---
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  fullName      String?   @map("full_name")
+  passwordHash  String?   @map("password_hash")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  // Relaciones
+  organizationsOwned Organization[] // Gyms que posee
+  memberships        Membership[]   // Gyms a los que va
+  instructedClasses  ClassSession[] // Clases que da
+
+  @@map("users")
+}
+
+model Organization {
+  id                  String   @id @default(uuid())
+  name                String
+  ownerId             String   @map("owner_id")
+  
+  // Configuración
+  slotDurationMinutes Int      @default(60) @map("slot_duration")
+  openHour            Int      @default(7)  @map("open_hour")
+  closeHour           Int      @default(22) @map("close_hour")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  owner         User           @relation(fields: [ownerId], references: [id])
+  memberships   Membership[]
+  categories    Category[]
+  classSessions ClassSession[]
+
+  @@map("organizations")
+}
+
+model Membership {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  role           Role     @default(STUDENT)
+  categoryId     Int?     @map("category_id")
+  joinedAt       DateTime @default(now()) @map("joined_at")
+
+  // Relaciones
+  user           User            @relation(fields: [userId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  category       Category?       @relation(fields: [categoryId], references: [id])
+  creditPackages CreditPackage[]
+
+  @@unique([userId, organizationId])
+  @@map("memberships")
+}
+
+model Category {
+  id             Int      @id @default(autoincrement())
+  organizationId String   @map("organization_id")
+  name           String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  memberships   Membership[]
+  classSessions ClassSession[]
+
+  @@map("categories")
+}
+
+model CreditPackage {
+  id              String   @id @default(uuid())
+  membershipId    String   @map("membership_id")
+  initialAmount   Int      @map("initial_amount")
+  remainingAmount Int      @map("remaining_amount")
+  expiresAt       DateTime @map("expires_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  membership Membership @relation(fields: [membershipId], references: [id])
+  bookings   Booking[]
+
+  @@map("credit_packages")
+}
+
+model ClassSession {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  title          String
+  startTime      DateTime @map("start_time")
+  endTime        DateTime @map("end_time")
+  capacity       Int
+  instructorId   String   @map("instructor_id")
+  categoryId     Int      @map("category_id")
+  isCancelled    Boolean  @default(false) @map("is_cancelled")
+
+  // Relaciones
+  organization Organization @relation(fields: [organizationId], references: [id])
+  instructor   User         @relation(fields: [instructorId], references: [id])
+  category     Category     @relation(fields: [categoryId], references: [id])
+  bookings     Booking[]
+
+  @@map("class_sessions")
+}
+
+model Booking {
+  id              String        @id @default(uuid())
+  userId          String        @map("user_id")
+  classSessionId  String        @map("class_session_id")
+  creditPackageId String        @map("credit_package_id")
+  status          BookingStatus
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  // Relaciones
+  classSession  ClassSession  @relation(fields: [classSessionId], references: [id])
+  creditPackage CreditPackage @relation(fields: [creditPackageId], references: [id])
+
+  @@map("bookings")
+}
