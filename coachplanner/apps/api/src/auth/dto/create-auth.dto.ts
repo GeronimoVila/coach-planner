@@ -1,22 +1,17 @@
 import { IsEmail, IsString, MinLength, IsNotEmpty } from 'class-validator';
 
 export class RegisterOwnerDto {
-  @IsString()
   @IsNotEmpty()
-  username: string;
+  @IsString()
+  organizationName: string;
+
+  @IsNotEmpty()
+  @IsString()
+  fullName: string;
 
   @IsEmail()
   email: string;
 
-  @IsString()
-  @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres' })
+  @MinLength(6)
   password: string;
-
-  @IsString()
-  @IsNotEmpty()
-  fullName: string;
-
-  @IsString()
-  @IsNotEmpty()
-  organizationName: string;
 }
