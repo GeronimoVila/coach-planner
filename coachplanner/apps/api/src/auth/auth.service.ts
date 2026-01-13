@@ -71,39 +71,64 @@ export class AuthService {
 
     const existingUser = await this.db.user.findUnique({
       where: { email: dto.email },
+      include: { memberships: true }
     });
 
+    let userIdToLink = '';
+
     if (existingUser) {
-      throw new ConflictException('Este correo ya está registrado en la plataforma.');
+      
+      if (!existingUser.passwordHash) {
+        throw new ConflictException('El usuario ya existe pero no tiene contraseña configurada. Contacta soporte.');
+      }
+
+      const isMatch = await bcrypt.compare(dto.password, existingUser.passwordHash);
+      
+      if (!isMatch) {
+        throw new ConflictException('El usuario ya existe. Ingresa tu contraseña actual para unirte a este gimnasio.');
+      }
+
+      const isAlreadyMember = existingUser.memberships.some(m => m.organizationId === organization.id);
+      if (isAlreadyMember) {
+        throw new ConflictException('Ya eres miembro de este gimnasio. Inicia sesión.');
+      }
+
+      userIdToLink = existingUser.id;
+
+    } else {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(dto.password, salt);
+
+      const newUser = await this.db.user.create({
+        data: {
+          email: dto.email,
+          fullName: dto.name, 
+          passwordHash: hashedPassword,
+        },
+      });
+      
+      userIdToLink = newUser.id;
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(dto.password, salt);
-
     try {
-      return await this.db.$transaction(async (tx) => {
-        const newUser = await tx.user.create({
-          data: {
-            email: dto.email,
-            fullName: dto.name, 
-            passwordHash: hashedPassword,
-          },
-        });
-
-        await tx.membership.create({
-          data: {
-            userId: newUser.id,
-            organizationId: organization.id,
-            role: Role.STUDENT,
-          }
-        });
-
-        return { message: `Bienvenido a ${organization.name}`, userId: newUser.id };
+      await this.db.membership.create({
+        data: {
+          userId: userIdToLink,
+          organizationId: organization.id,
+          role: Role.STUDENT,
+        }
       });
 
+      return { 
+        message: existingUser 
+          ? `¡Cuenta vinculada! Bienvenido a ${organization.name}` 
+          : `Registro exitoso. Bienvenido a ${organization.name}`,
+        userId: userIdToLink 
+      };
+
     } catch (error) {
-      console.error('Error registrando alumno:', error);
-      throw new InternalServerErrorException('Error al crear la cuenta del alumno.');
+      console.error('Error creando membresía:', error);
+      throw new InternalServerErrorException('Error al unirse al gimnasio.');
     }
   }
 
@@ -112,7 +137,10 @@ export class AuthService {
 
     const user = await this.db.user.findUnique({ 
       where: { email },
-      include: { memberships: true }
+      include: { 
+        memberships: true,
+        organizationsOwned: true
+      }
     });
     
     if (!user || !user.passwordHash) {
@@ -122,8 +150,16 @@ export class AuthService {
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) throw new UnauthorizedException('Credenciales inválidas');
 
-    const primaryRole = user.memberships.length > 0 ? user.memberships[0].role : Role.STUDENT;
-    const orgId = user.memberships.length > 0 ? user.memberships[0].organizationId : null;
+    let primaryRole: Role = Role.STUDENT; 
+    let orgId: string | null = null; 
+
+    if (user.organizationsOwned.length > 0) {
+      primaryRole = Role.OWNER;
+      orgId = user.organizationsOwned[0].id;
+    } else if (user.memberships.length > 0) {
+      primaryRole = user.memberships[0].role;
+      orgId = user.memberships[0].organizationId;
+    }
 
     const payload = { 
       sub: user.id, 
@@ -137,6 +173,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
+        fullName: user.fullName,
         role: primaryRole,
         organizationId: orgId 
       }
@@ -144,15 +181,15 @@ export class AuthService {
   }
 
   async getGymInfo(slug: string) {
-  const organization = await this.db.organization.findUnique({
-    where: { slug: slug },
-    select: { name: true, id: true }
-  });
+    const organization = await this.db.organization.findUnique({
+      where: { slug: slug },
+      select: { name: true, id: true }
+    });
 
-  if (!organization) {
-    throw new NotFoundException('El gimnasio no existe.');
+    if (!organization) {
+      throw new NotFoundException('El gimnasio no existe.');
+    }
+
+    return organization;
   }
-
-  return organization;
-}
 }

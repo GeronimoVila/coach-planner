@@ -24,7 +24,6 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       
-      {/* --- NAVBAR --- */}
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-xl text-primary">
@@ -83,7 +82,9 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="text-2xl font-bold">0</div>
                 <p className="text-xs text-muted-foreground">+0% desde el mes pasado</p>
-                <Button className="w-full mt-4" variant="outline">Ver Alumnos</Button>
+                <Link href="/students">
+                  <Button className="w-full mt-4" variant="outline">Ver Alumnos</Button>
+                </Link>
               </CardContent>
             </Card>
 
@@ -96,7 +97,9 @@ export default function DashboardPage() {
                 <Link href="/classes">
                   <Button className="w-full">Gestionar Horarios</Button>
                 </Link>
-                <Button variant="secondary">Invitar Alumnos</Button>
+                <Link href="/students">
+                  <Button variant="secondary" className="w-full">Invitar Alumnos</Button>
+                </Link>
               </CardContent>
             </Card>
           </div>
