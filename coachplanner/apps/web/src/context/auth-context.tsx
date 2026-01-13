@@ -8,6 +8,7 @@ interface User {
   email: string;
   role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
   organizationId: string | null;
+  fullName?: string;
 }
 
 interface AuthContextType {

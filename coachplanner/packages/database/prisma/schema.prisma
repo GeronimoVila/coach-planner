@@ -112,6 +112,7 @@ model ClassSession {
   id             String   @id @default(uuid())
   organizationId String   @map("organization_id")
   title          String
+  description    String?
   startTime      DateTime @map("start_time")
   endTime        DateTime @map("end_time")
   capacity       Int
