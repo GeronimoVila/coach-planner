@@ -7,10 +7,10 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
-  Loader2, ArrowLeft, Search, UserPlus, Mail, Calendar, User as UserIcon
+  Loader2, ArrowLeft, Search, UserPlus, Mail, Calendar, User as UserIcon, CreditCard, Plus
 } from 'lucide-react';
 
 interface Student {
@@ -20,6 +20,7 @@ interface Student {
   email: string;
   joinedAt: string;
   role: string;
+  credits: number;
 }
 
 export default function StudentsPage() {
@@ -33,6 +34,10 @@ export default function StudentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({ fullName: '', email: '' });
+
+  const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [creditForm, setCreditForm] = useState({ amount: 8, daysValid: 30, name: 'Pack Mensual' });
 
   useEffect(() => {
     if (authLoading) return;
@@ -71,6 +76,34 @@ export default function StudentsPage() {
     }
   };
 
+  const handleAssignCredits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+    
+    setSubmitting(true);
+    try {
+      await api.post('/credit-packages', {
+        studentId: selectedStudent.id,
+        amount: Number(creditForm.amount),
+        daysValid: Number(creditForm.daysValid),
+        name: creditForm.name
+      });
+      toast.success(`Créditos asignados a ${selectedStudent.fullName}`);
+      setIsCreditModalOpen(false);
+      setCreditForm({ amount: 8, daysValid: 30, name: 'Pack Mensual' });
+      fetchStudents();
+    } catch (error: any) {
+      toast.error('Error asignando créditos');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openCreditModal = (student: Student) => {
+    setSelectedStudent(student);
+    setIsCreditModalOpen(true);
+  };
+
   const filteredStudents = students.filter(s => 
     (s.fullName?.toLowerCase() || '').includes(search.toLowerCase()) ||
     s.email.toLowerCase().includes(search.toLowerCase())
@@ -81,9 +114,9 @@ export default function StudentsPage() {
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col p-4 md:p-8">
       
-      <div className="max-w-5xl mx-auto w-full mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto w-full mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
+          <Button variant="ghost" size="icon" onClick={() => router.push('/')} className="md:hidden">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -96,7 +129,7 @@ export default function StudentsPage() {
         </Button>
       </div>
 
-      <div className="max-w-5xl mx-auto w-full space-y-6">
+      <div className="max-w-6xl mx-auto w-full space-y-6">
         
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -121,16 +154,18 @@ export default function StudentsPage() {
         ) : (
           <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <div className="col-span-5">Alumno</div>
-              <div className="col-span-4">Contacto</div>
-              <div className="col-span-3 text-right">Fecha Ingreso</div>
+              <div className="col-span-4">Alumno</div>
+              <div className="col-span-3">Contacto</div>
+              <div className="col-span-2 text-center">Créditos</div>
+              <div className="col-span-2 text-right">Fecha Ingreso</div>
+              <div className="col-span-1 text-center">Acciones</div>
             </div>
 
             <div className="divide-y">
               {filteredStudents.map((student) => (
                 <div key={student.membershipId} className="p-4 md:grid md:grid-cols-12 md:gap-4 md:items-center hover:bg-gray-50 transition-colors">
                   
-                  <div className="col-span-5 flex items-center gap-3 mb-2 md:mb-0">
+                  <div className="col-span-4 flex items-center gap-3 mb-2 md:mb-0">
                     <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
                       {student.fullName?.[0]?.toUpperCase() || student.email[0].toUpperCase()}
                     </div>
@@ -143,13 +178,32 @@ export default function StudentsPage() {
                     </div>
                   </div>
 
-                  <div className="col-span-4 flex items-center text-sm text-gray-600 mb-2 md:mb-0">
+                  <div className="col-span-3 flex items-center text-sm text-gray-600 mb-2 md:mb-0 truncate">
                     <Mail className="h-4 w-4 mr-2 text-gray-400" />
-                    {student.email}
+                    <span className="truncate">{student.email}</span>
                   </div>
 
-                  <div className="col-span-3 text-right hidden md:block text-sm text-gray-500">
+                  <div className="col-span-2 flex items-center justify-start md:justify-center mb-2 md:mb-0">
+                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${student.credits > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {student.credits} Clases
+                    </div>
+                  </div>
+
+                  <div className="col-span-2 text-right hidden md:block text-sm text-gray-500">
                     {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
+                  </div>
+
+                  <div className="col-span-1 flex justify-end md:justify-center mt-2 md:mt-0">
+                     <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-8 w-8 p-0 md:h-9 md:w-auto md:px-3 gap-2"
+                        onClick={() => openCreditModal(student)}
+                        title="Asignar Pack de Clases"
+                     >
+                        <CreditCard className="h-4 w-4" />
+                        <span className="hidden md:inline">Cargar</span>
+                     </Button>
                   </div>
 
                 </div>
@@ -186,7 +240,7 @@ export default function StudentsPage() {
                     onChange={e => setFormData({...formData, email: e.target.value})}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Si el usuario ya existe, se vinculará a tu gimnasio. Si es nuevo, se creará con contraseña temporal.
+                    Si ya existe, se vinculará. Si es nuevo, se crea cuenta.
                   </p>
                 </div>
                 <div className="pt-4 flex gap-3">
@@ -195,6 +249,80 @@ export default function StudentsPage() {
                   </Button>
                   <Button type="submit" className="flex-1" disabled={submitting}>
                     {submitting ? <Loader2 className="animate-spin mr-2" /> : 'Registrar'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {isCreditModalOpen && selectedStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md shadow-xl animate-in fade-in zoom-in duration-200">
+            <CardHeader>
+              <CardTitle>Asignar Pack de Clases</CardTitle>
+              <CardDescription>
+                Cargando créditos a <strong>{selectedStudent.fullName}</strong>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAssignCredits} className="space-y-4">
+                
+                <div className="space-y-2">
+                  <Label>Nombre del Pack</Label>
+                  <Input 
+                    required 
+                    placeholder="Ej: Pack Enero, Promo 8 clases..." 
+                    value={creditForm.name}
+                    onChange={e => setCreditForm({...creditForm, name: e.target.value})}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                    <Label>Cantidad Clases</Label>
+                    <div className="relative">
+                        <Plus className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                        <Input 
+                            type="number" 
+                            min="1"
+                            required 
+                            className="pl-9"
+                            value={creditForm.amount || ''}
+                            onChange={e => setCreditForm({
+                                ...creditForm, 
+                                amount: e.target.value === '' ? 0 : parseInt(e.target.value)
+                            })}
+                        />
+                    </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                    <Label>Días de Validez</Label>
+                    <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                        <Input 
+                            type="number" 
+                            min="1"
+                            required 
+                            className="pl-9"
+                            value={creditForm.daysValid || ''}
+                            onChange={e => setCreditForm({
+                                ...creditForm, 
+                                daysValid: e.target.value === '' ? 0 : parseInt(e.target.value)
+                            })}
+                        />
+                    </div>
+                    </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setIsCreditModalOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" className="flex-1" disabled={submitting}>
+                    {submitting ? <Loader2 className="animate-spin mr-2" /> : 'Confirmar Carga'}
                   </Button>
                 </div>
               </form>

@@ -87,7 +87,6 @@ export default function CategoriesPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       
-      {/* 1. SECCIÓN SUPERIOR (Encabezado) - Se queda arriba */}
       <div className="p-4 md:p-8 pb-0">
         <div className="max-w-2xl mx-auto flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
@@ -100,7 +99,6 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      {/* 2. SECCIÓN CENTRAL (Tarjeta) - Se expande y centra */}
       <div className="flex-1 flex flex-col justify-center p-4 md:p-8">
         <div className="w-full max-w-2xl mx-auto">
           <Card className="shadow-md">

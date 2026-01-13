@@ -23,30 +23,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      
-      <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-xl text-primary">
-            <div className="bg-primary/10 p-2 rounded-lg">
-              <Dumbbell className="h-5 w-5" />
-            </div>
-            CoachPlanner
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-right hidden sm:block">
-              <p className="font-medium">{user.email}</p>
-              <p className="text-xs text-muted-foreground capitalize">
-                {isOwner ? 'Administrador' : 'Alumno'}
-              </p>
-            </div>
-            <Button variant="ghost" size="icon" onClick={logout} title="Cerrar Sesión">
-              <LogOut className="h-5 w-5 text-muted-foreground hover:text-destructive transition-colors" />
-            </Button>
-          </div>
-        </div>
-      </header>
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
@@ -57,7 +33,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* --- VISTA DE PROFESOR / DUEÑO --- */}
+        {/* --- VISTA DE PROFESOR --- */}
         {isOwner ? (
           <div className="grid gap-6 md:grid-cols-3">
             <Card>

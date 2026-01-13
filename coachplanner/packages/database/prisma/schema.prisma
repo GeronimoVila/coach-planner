@@ -68,12 +68,13 @@ model Membership {
   organizationId String   @map("organization_id")
   role           Role     @default(STUDENT)
   categoryId     Int?     @map("category_id")
+  credits        Int      @default(0)
   joinedAt       DateTime @default(now()) @map("joined_at")
 
   // Relaciones
-  user           User           @relation(fields: [userId], references: [id])
-  organization   Organization   @relation(fields: [organizationId], references: [id])
-  category       Category?      @relation(fields: [categoryId], references: [id])
+  user           User             @relation(fields: [userId], references: [id])
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  category       Category?        @relation(fields: [categoryId], references: [id])
   creditPackages CreditPackage[]
 
   // Validaciones
@@ -97,6 +98,7 @@ model Category {
 model CreditPackage {
   id              String   @id @default(uuid())
   membershipId    String   @map("membership_id")
+  name            String   
   initialAmount   Int      @map("initial_amount")
   remainingAmount Int      @map("remaining_amount")
   expiresAt       DateTime @map("expires_at")

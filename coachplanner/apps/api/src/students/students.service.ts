@@ -74,6 +74,7 @@ export class StudentsService {
       email: m.user.email,
       joinedAt: m.joinedAt,
       role: m.role,
+      credits: m.credits,
     }));
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request, Query, BadRequestException } from '@nestjs/common'; // <--- Agrega BadRequestException
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request, Query, BadRequestException } from '@nestjs/common';
 import { ClassesService } from './classes.service';
 import { CreateClassDto } from './dto/create-class.dto';
 import { AuthGuard } from '@nestjs/passport';

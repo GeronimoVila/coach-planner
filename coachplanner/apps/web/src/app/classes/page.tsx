@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import useMediaQuery from '@/hooks/use-media-query';
 
-// --- TIPOS ---
 interface Category {
   id: number;
   name: string;
@@ -34,11 +33,9 @@ interface ClassSession {
   instructor?: { name: string, avatarUrl?: string }; 
 }
 
-// --- UTILIDADES ---
 const getStartOfWeek = (date: Date) => {
   const d = new Date(date);
   const day = d.getDay();
-  // Ajustar al Lunes
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
@@ -86,27 +83,22 @@ export default function ClassesPage() {
   const router = useRouter();
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
-  // Estados de Datos
   const [classes, setClasses] = useState<ClassSession[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Configuración (Desde DB + Input manual)
   const [intervalMinutes, setIntervalMinutes] = useState(60); 
   const [gymHours, setGymHours] = useState({ start: 7, end: 22 });
 
-  // Estados de Navegación
   const [weekStart, setWeekStart] = useState(getStartOfWeek(new Date()));
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  // Estados del Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '', description: '', start: '', end: '', capacity: 10, categoryId: ''
   });
 
-  // 1. CARGAR DATOS + CONFIGURACIÓN
   useEffect(() => {
     if (authLoading) return;
     if (!user || (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'INSTRUCTOR')) {
@@ -114,7 +106,6 @@ export default function ClassesPage() {
       return;
     }
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading, router, weekStart]);
 
   const fetchData = async () => {
@@ -133,7 +124,6 @@ export default function ClassesPage() {
         setClasses(classesRes.data);
         if(categoriesRes.data) setCategories(categoriesRes.data);
         
-        // Cargar configuración guardada en DB
         if (configRes.data) {
           if (configRes.data.slotDurationMinutes) setIntervalMinutes(configRes.data.slotDurationMinutes);
           if (configRes.data.openHour !== undefined && configRes.data.closeHour !== undefined) {
@@ -148,9 +138,8 @@ export default function ClassesPage() {
     }
   };
 
-  // 2. CAMBIAR DURACIÓN (Guarda en DB)
   const handleDurationChange = async (newDuration: number) => {
-    setIntervalMinutes(newDuration); // Actualización visual inmediata
+    setIntervalMinutes(newDuration);
     try {
       await api.patch('/organizations/config', { slotDurationMinutes: newDuration });
       toast.success('Configuración guardada');
@@ -274,7 +263,6 @@ export default function ClassesPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       
-      {/* ================= HEADER ================= */}
       <header className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-20">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
@@ -286,7 +274,6 @@ export default function ClassesPage() {
         <div className="flex items-center gap-2">
           {isDesktop ? (
              <>
-               {/* --- INPUT DE DURACIÓN (Recuperado) --- */}
                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border mr-2">
                   <span className="text-xs font-medium text-gray-500">Duración:</span>
                   <Input 
@@ -300,7 +287,6 @@ export default function ClassesPage() {
                   <span className="text-xs text-gray-400">min</span>
                </div>
                
-               {/* Controles de Semana */}
                <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border mr-2">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevWeek}>
                       <ChevronLeft className="h-4 w-4" />
@@ -314,7 +300,6 @@ export default function ClassesPage() {
               </div>
              </>
           ) : (
-             /* En móvil ya no mostramos la Lupa, solo queda el avatar alineado a la derecha */
              null
           )}
           
@@ -324,13 +309,11 @@ export default function ClassesPage() {
         </div>
       </header>
 
-      {/* ================= SUB-HEADER MÓVIL ================= */}
       <div className="md:hidden flex flex-col border-b bg-white sticky top-16.25 z-20">
         <div className="flex justify-between items-center p-4 pb-2">
            <div className="flex items-center gap-1 font-semibold text-lg capitalize">
              {selectedDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
            </div>
-           {/* Visualizador de Duración en Móvil (No editable aquí para ahorrar espacio) */}
            <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full text-xs font-medium text-gray-600">
               <Clock className="h-3 w-3" /> {formatDuration(intervalMinutes)}
            </div>
@@ -354,10 +337,8 @@ export default function ClassesPage() {
       </div>
 
 
-      {/* ================= CONTENIDO PRINCIPAL ================= */}
       <main className="flex-1 relative bg-gray-50 p-4 overflow-y-auto">
         
-        {/* ---------------- VISTA ESCRITORIO (GRILLA) ---------------- */}
         <div className="hidden md:block bg-white rounded-xl shadow-sm overflow-hidden border">
           <div className="overflow-x-auto">
             <div className="min-w-200">
@@ -391,7 +372,6 @@ export default function ClassesPage() {
                         >
                           {activeClass ? (
                             <div className={`h-full w-full rounded-lg p-2 flex flex-col justify-between shadow-sm relative group/card ${categoryStyle}`}>
-                              {/* BOTÓN ELIMINAR (ESCRITORIO) */}
                               <button 
                                 onClick={(e) => handleDelete(e, activeClass.id)}
                                 className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-red-500 opacity-0 group-hover/card:opacity-100 hover:bg-red-100 transition-all z-10"
@@ -428,7 +408,6 @@ export default function ClassesPage() {
         </div>
 
 
-        {/* ---------------- VISTA MÓVIL (LISTA) ---------------- */}
         <div className="md:hidden space-y-4 pb-20">
           {timeSlots.map((minutes) => {
              const activeClass = getClassInSlot(selectedDate, minutes);
@@ -448,7 +427,6 @@ export default function ClassesPage() {
                              <h3 className="font-bold text-lg">{activeClass.title}</h3>
                              <p className="text-sm opacity-80">{activeClass.category.name}</p>
                            </div>
-                           {/* BOTÓN ELIMINAR (MÓVIL) */}
                            <Button 
                               variant="ghost" 
                               size="icon" 
@@ -488,7 +466,6 @@ export default function ClassesPage() {
 
       </main>
 
-      {/* ================= MODAL DE CREACIÓN ================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4">
           <Card className="w-full sm:max-w-lg shadow-xl rounded-t-2xl sm:rounded-xl animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-200">
