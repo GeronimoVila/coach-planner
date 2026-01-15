@@ -77,4 +77,30 @@ export class StudentsService {
       credits: m.credits,
     }));
   }
+
+  async findMe(userId: string, orgId: string) {
+    const membership = await this.db.membership.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: userId,
+          organizationId: orgId,
+        },
+      },
+      include: {
+        user: true,
+      }
+    });
+
+    if (!membership) {
+      return { credits: 0, fullName: '', bookingsCount: 0 };
+    }
+
+    return {
+      id: membership.userId,
+      fullName: membership.user.fullName,
+      email: membership.user.email,
+      credits: membership.credits,
+      role: membership.role,
+    };
+  }
 }

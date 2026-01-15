@@ -1,13 +1,41 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, LogOut, LayoutDashboard, CalendarDays, Users, Dumbbell } from 'lucide-react';
+import { Loader2, LayoutDashboard, CalendarDays, Users, Dumbbell } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 export default function DashboardPage() {
-  const { user, logout, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();
+  
+  const [studentStats, setStudentStats] = useState({ credits: 0, bookings: 0 });
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  useEffect(() => {
+    if (user && user.role === 'STUDENT') {
+      fetchStudentStats();
+    }
+  }, [user]);
+
+  const fetchStudentStats = async () => {
+    setLoadingStats(true);
+    try {
+      const res = await api.get('/students/me');
+      setStudentStats({ 
+        credits: res.data.credits, 
+        bookings: 0
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo cargar tu información de créditos');
+    } finally {
+      setLoadingStats(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -26,10 +54,13 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            Hola, {user.email.split('@')[0]} 👋
+            Hola, {user.fullName?.split(' ')[0] || user.email.split('@')[0]} 👋
           </h1>
           <p className="text-muted-foreground mt-1">
-            Aquí tienes el resumen de tu actividad en el gimnasio.
+            {isOwner 
+              ? 'Aquí tienes el resumen de tu actividad en el gimnasio.'
+              : `Bienvenido. Tienes ${studentStats.credits} créditos disponibles para entrenar.`
+            }
           </p>
         </div>
 
@@ -100,8 +131,17 @@ export default function DashboardPage() {
                 <Dumbbell className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">--</div>
-                <p className="text-xs text-muted-foreground">Plan actual: Estándar</p>
+                {/* MOSTRAR CRÉDITOS REALES */}
+                <div className="text-2xl font-bold text-primary">
+                  {loadingStats ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : (
+                    studentStats.credits
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {studentStats.credits > 0 ? '¡A entrenar!' : 'Sin saldo disponible'}
+                </p>
               </CardContent>
             </Card>
 

@@ -10,6 +10,14 @@ import { Role } from '@repo/database';
 export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}
 
+  @Get('me')
+  @Roles(Role.STUDENT)
+  getMe(@Request() req) {
+    const orgId = req.user.orgId;
+    const userId = req.user.userId;
+    return this.studentsService.findMe(userId, orgId);
+  }
+
   @Post()
   @Roles(Role.OWNER, Role.ADMIN, Role.INSTRUCTOR)
   create(@Request() req, @Body() body: { email: string; fullName: string }) {
