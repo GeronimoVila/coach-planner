@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CreateClassDto } from './dto/create-class.dto';
 import { DatabaseService } from 'src/database/database.service';
 import { BookingStatus } from '@repo/database';
+import { CloneWeekDto } from './dto/clone-week.dto';
 
 @Injectable()
 export class ClassesService {
@@ -114,7 +115,7 @@ export class ClassesService {
     return this.db.$transaction(async (tx) => {
       const session = await tx.classSession.findUnique({
         where: { id, organizationId: orgId },
-        include: { bookings: { where: { status: BookingStatus.CONFIRMED } } } // Traer reservas activas
+        include: { bookings: { where: { status: BookingStatus.CONFIRMED } } } 
       });
 
       if (!session) throw new NotFoundException('Clase no encontrada');
@@ -143,6 +144,59 @@ export class ClassesService {
       }
 
       return { message: `Clase cancelada. Se reembolsaron ${session.bookings.length} créditos.` };
+    });
+  }
+
+  async cloneWeek(orgId: string, dto: CloneWeekDto) {
+    return this.db.$transaction(async (tx) => {
+      const sourceStart = new Date(dto.sourceWeekStart);
+      const targetStart = new Date(dto.targetWeekStart);
+
+      const sourceEnd = new Date(sourceStart);
+      sourceEnd.setDate(sourceEnd.getDate() + 7);
+
+      const sourceClasses = await tx.classSession.findMany({
+        where: {
+          organizationId: orgId,
+          startTime: {
+            gte: sourceStart,
+            lt: sourceEnd,
+          },
+          isCancelled: false,
+        },
+      });
+
+      if (sourceClasses.length === 0) {
+        return { count: 0, message: 'No hay clases para clonar en la semana seleccionada.' };
+      }
+
+      const timeDiff = targetStart.getTime() - sourceStart.getTime();
+
+      const newClassesData = sourceClasses.map((cls) => {
+        const newStartTime = new Date(cls.startTime.getTime() + timeDiff);
+        const newEndTime = new Date(cls.endTime.getTime() + timeDiff);
+
+        return {
+          organizationId: orgId,
+          title: cls.title,
+          description: cls.description,
+          startTime: newStartTime,
+          endTime: newEndTime,
+          capacity: cls.capacity,
+          categoryId: cls.categoryId,
+          instructorId: cls.instructorId,
+          isCancelled: false,
+        };
+      });
+
+      const result = await tx.classSession.createMany({
+        data: newClassesData,
+      });
+
+      return { 
+        count: result.count, 
+        message: `Se clonaron ${result.count} clases exitosamente a la semana del ${targetStart.toLocaleDateString()}.` 
+      };
     });
   }
 }

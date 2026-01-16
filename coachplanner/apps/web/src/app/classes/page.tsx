@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, ChevronLeft, ChevronRight, X, User, Plus, 
-  Clock, Trash2, Check, Ban
+  Clock, Trash2, Check, Ban, Copy
 } from 'lucide-react';
 import useMediaQuery from '@/hooks/use-media-query';
 
@@ -240,6 +240,41 @@ export default function ClassesPage() {
     }
   };
 
+  const handleCloneWeek = async () => {
+    const nextWeekStart = addDays(weekStart, 7);
+    
+    const message = `¿Quieres copiar todas las clases de esta semana (${weekStart.toLocaleDateString()}) a la SIGUIENTE semana (${nextWeekStart.toLocaleDateString()})?`;
+    
+    if (!confirm(message)) return;
+
+    const promise = api.post('/classes/clone-week', {
+      sourceWeekStart: weekStart.toISOString(),
+      targetWeekStart: nextWeekStart.toISOString()
+    });
+
+    toast.promise(promise, {
+      loading: 'Clonando semana...',
+      success: (res) => {
+        if (res.data.count === 0) {
+            return 'No hay clases para clonar en esta semana.';
+        }
+        return `¡Éxito! Se clonaron ${res.data.count} clases.`;
+      },
+      error: 'Error al intentar clonar la semana'
+    });
+
+    try {
+      const res = await promise;
+      
+      if (res.data.count > 0) {
+         setWeekStart(nextWeekStart);
+      }
+      
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   const timeSlots = useMemo(() => {
@@ -312,6 +347,18 @@ export default function ClassesPage() {
                     onChange={(e) => handleConfigChange('cancellationWindow', Number(e.target.value))}
                   />
                </div>
+
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 className="mr-2 gap-2 border-dashed border-gray-400 text-gray-600 hover:border-primary hover:text-primary"
+                 onClick={handleCloneWeek}
+                 title="Copiar estas clases a la semana siguiente"
+               >
+                 <Copy className="h-4 w-4" />
+                 <span className="hidden lg:inline">Clonar Semana</span>
+                 <span className="lg:hidden">Clonar</span>
+               </Button>
                
                <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border mr-2">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevWeek}>

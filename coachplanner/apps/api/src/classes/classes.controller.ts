@@ -5,6 +5,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
+import { CloneWeekDto } from './dto/clone-week.dto';
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('classes')
@@ -59,5 +60,11 @@ export class ClassesController {
   @Roles(Role.OWNER, Role.ADMIN, Role.INSTRUCTOR)
   cancelSession(@Request() req, @Param('id') id: string) {
     return this.classesService.cancelClassSession(id, req.user.orgId);
+  }
+
+  @Post('clone-week')
+  @Roles(Role.OWNER, Role.ADMIN)
+  cloneWeek(@Request() req, @Body() dto: CloneWeekDto) {
+    return this.classesService.cloneWeek(req.user.orgId, dto);
   }
 }
