@@ -116,6 +116,7 @@ export class AuthService {
           userId: userIdToLink,
           organizationId: organization.id,
           role: Role.STUDENT,
+          categoryId: dto.categoryId, 
         }
       });
 
@@ -183,7 +184,13 @@ export class AuthService {
   async getGymInfo(slug: string) {
     const organization = await this.db.organization.findUnique({
       where: { slug: slug },
-      select: { name: true, id: true }
+      select: { 
+        name: true, 
+        id: true,
+        categories: {
+          select: { id: true, name: true },
+        }
+      }
     });
 
     if (!organization) {

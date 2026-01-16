@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request, UseGuards, Patch, Param } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/auth/roles.guard';
@@ -30,5 +30,16 @@ export class StudentsController {
   findAll(@Request() req) {
     const orgId = req.user.organizationId || req.user.orgId;
     return this.studentsService.findAll(orgId);
+  }
+
+  @Patch(':id')
+  @Roles(Role.OWNER, Role.ADMIN)
+  update(
+    @Request() req, 
+    @Param('id') studentId: string, 
+    @Body() body: { categoryId?: number }
+  ) {
+    const orgId = req.user.orgId;
+    return this.studentsService.update(studentId, orgId, body);
   }
 }

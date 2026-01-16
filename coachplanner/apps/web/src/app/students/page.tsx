@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
-  Loader2, ArrowLeft, Search, UserPlus, Mail, Calendar, User as UserIcon, CreditCard, Plus
+  Loader2, ArrowLeft, Search, UserPlus, Mail, Calendar, User as UserIcon, CreditCard, Plus, Tag
 } from 'lucide-react';
 
 interface Student {
@@ -21,6 +21,13 @@ interface Student {
   joinedAt: string;
   role: string;
   credits: number;
+  categoryName?: string;
+  categoryId?: number | null;
+}
+
+interface Category {
+  id: number;
+  name: string;
 }
 
 export default function StudentsPage() {
@@ -28,14 +35,15 @@ export default function StudentsPage() {
   const router = useRouter();
 
   const [students, setStudents] = useState<Student[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [formData, setFormData] = useState({ fullName: '', email: '' });
-
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [formData, setFormData] = useState({ fullName: '', email: '', categoryId: '' });
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [creditForm, setCreditForm] = useState({ amount: 8, daysValid: 30, name: 'Pack Mensual' });
 
@@ -45,16 +53,20 @@ export default function StudentsPage() {
       router.push('/');
       return;
     }
-    fetchStudents();
+    fetchData();
   }, [user, authLoading, router]);
 
-  const fetchStudents = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/students');
-      setStudents(res.data);
+      const [studentsRes, categoriesRes] = await Promise.all([
+        api.get('/students'),
+        api.get('/categories')
+      ]);
+      setStudents(studentsRes.data);
+      setCategories(categoriesRes.data);
     } catch (error) {
-      toast.error('Error cargando alumnos');
+      toast.error('Error cargando datos');
     } finally {
       setLoading(false);
     }
@@ -64,11 +76,14 @@ export default function StudentsPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post('/students', formData);
+      await api.post('/students', {
+        ...formData,
+        categoryId: formData.categoryId ? Number(formData.categoryId) : undefined
+      });
       toast.success('Alumno registrado correctamente');
-      setFormData({ fullName: '', email: '' });
+      setFormData({ fullName: '', email: '', categoryId: '' });
       setIsModalOpen(false);
-      fetchStudents();
+      fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Error al registrar');
     } finally {
@@ -76,38 +91,56 @@ export default function StudentsPage() {
     }
   };
 
-  const handleAssignCredits = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStudent) return;
-    
-    setSubmitting(true);
+  const handleCategoryChange = async (studentId: string, newCategoryId: string) => {
+    const originalStudents = [...students];
+    setStudents(prev => prev.map(s => 
+        s.id === studentId 
+            ? { ...s, categoryId: newCategoryId ? Number(newCategoryId) : null } 
+            : s
+    ));
+
     try {
-      await api.post('/credit-packages', {
-        studentId: selectedStudent.id,
-        amount: Number(creditForm.amount),
-        daysValid: Number(creditForm.daysValid),
-        name: creditForm.name
-      });
-      toast.success(`Créditos asignados a ${selectedStudent.fullName}`);
-      setIsCreditModalOpen(false);
-      setCreditForm({ amount: 8, daysValid: 30, name: 'Pack Mensual' });
-      fetchStudents();
-    } catch (error: any) {
-      toast.error('Error asignando créditos');
-    } finally {
-      setSubmitting(false);
+        await api.patch(`/students/${studentId}`, {
+            categoryId: newCategoryId ? Number(newCategoryId) : null
+        });
+        toast.success('Categoría actualizada');
+    } catch (error) {
+        setStudents(originalStudents);
+        toast.error('Error al actualizar categoría');
     }
   };
 
-  const openCreditModal = (student: Student) => {
-    setSelectedStudent(student);
-    setIsCreditModalOpen(true);
-  };
-
-  const filteredStudents = students.filter(s => 
-    (s.fullName?.toLowerCase() || '').includes(search.toLowerCase()) ||
-    s.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleAssignCredits = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!selectedStudent) return;
+      setSubmitting(true);
+      try {
+        await api.post('/credit-packages', {
+          studentId: selectedStudent.id,
+          amount: Number(creditForm.amount),
+          daysValid: Number(creditForm.daysValid),
+          name: creditForm.name
+        });
+        toast.success(`Créditos asignados a ${selectedStudent.fullName}`);
+        setIsCreditModalOpen(false);
+        setCreditForm({ amount: 8, daysValid: 30, name: 'Pack Mensual' });
+        fetchData();
+      } catch (error: any) {
+        toast.error('Error asignando créditos');
+      } finally {
+        setSubmitting(false);
+      }
+    };
+  
+    const openCreditModal = (student: Student) => {
+      setSelectedStudent(student);
+      setIsCreditModalOpen(true);
+    };
+  
+    const filteredStudents = students.filter(s => 
+      (s.fullName?.toLowerCase() || '').includes(search.toLowerCase()) ||
+      s.email.toLowerCase().includes(search.toLowerCase())
+    );
 
   if (authLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
 
@@ -130,86 +163,84 @@ export default function StudentsPage() {
       </div>
 
       <div className="max-w-6xl mx-auto w-full space-y-6">
-        
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar por nombre o correo..." 
-            className="pl-10 bg-white"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar por nombre o correo..." 
+              className="pl-10 bg-white"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
 
         {loading ? (
-          <div className="text-center py-12"><Loader2 className="animate-spin mx-auto h-8 w-8 text-primary" /></div>
-        ) : filteredStudents.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-dashed">
-            <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <UserIcon className="h-6 w-6 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium">No se encontraron alumnos</h3>
-            <p className="text-muted-foreground text-sm">Prueba con otra búsqueda o registra uno nuevo.</p>
-          </div>
+            <div className="text-center py-12"><Loader2 className="animate-spin mx-auto h-8 w-8 text-primary" /></div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <div className="col-span-4">Alumno</div>
-              <div className="col-span-3">Contacto</div>
-              <div className="col-span-2 text-center">Créditos</div>
-              <div className="col-span-2 text-right">Fecha Ingreso</div>
-              <div className="col-span-1 text-center">Acciones</div>
-            </div>
-
-            <div className="divide-y">
-              {filteredStudents.map((student) => (
-                <div key={student.membershipId} className="p-4 md:grid md:grid-cols-12 md:gap-4 md:items-center hover:bg-gray-50 transition-colors">
-                  
-                  <div className="col-span-4 flex items-center gap-3 mb-2 md:mb-0">
-                    <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
-                      {student.fullName?.[0]?.toUpperCase() || student.email[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{student.fullName || 'Sin nombre'}</p>
-                      <span className="inline-flex md:hidden items-center text-xs text-gray-500 mt-0.5">
-                        <Calendar className="h-3 w-3 mr-1" /> 
-                        {new Date(student.joinedAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="col-span-3 flex items-center text-sm text-gray-600 mb-2 md:mb-0 truncate">
-                    <Mail className="h-4 w-4 mr-2 text-gray-400" />
-                    <span className="truncate">{student.email}</span>
-                  </div>
-
-                  <div className="col-span-2 flex items-center justify-start md:justify-center mb-2 md:mb-0">
-                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${student.credits > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {student.credits} Clases
-                    </div>
-                  </div>
-
-                  <div className="col-span-2 text-right hidden md:block text-sm text-gray-500">
-                    {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
-                  </div>
-
-                  <div className="col-span-1 flex justify-end md:justify-center mt-2 md:mt-0">
-                     <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="h-8 w-8 p-0 md:h-9 md:w-auto md:px-3 gap-2"
-                        onClick={() => openCreditModal(student)}
-                        title="Asignar Pack de Clases"
-                     >
-                        <CreditCard className="h-4 w-4" />
-                        <span className="hidden md:inline">Cargar</span>
-                     </Button>
-                  </div>
-
-                </div>
-              ))}
-            </div>
-          </div>
+             <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+             <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+               <div className="col-span-4">Alumno</div>
+               <div className="col-span-3">Categoría</div>
+               <div className="col-span-2 text-center">Créditos</div>
+               <div className="col-span-2 text-right">Fecha Ingreso</div>
+               <div className="col-span-1 text-center">Acciones</div>
+             </div>
+ 
+             <div className="divide-y">
+               {filteredStudents.map((student) => (
+                 <div key={student.membershipId} className="p-4 md:grid md:grid-cols-12 md:gap-4 md:items-center hover:bg-gray-50 transition-colors">
+                   
+                   <div className="col-span-4 flex items-center gap-3 mb-2 md:mb-0">
+                     <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+                       {student.fullName?.[0]?.toUpperCase() || student.email[0].toUpperCase()}
+                     </div>
+                     <div>
+                       <p className="font-medium text-gray-900">{student.fullName || 'Sin nombre'}</p>
+                       <div className="flex flex-col md:hidden">
+                           <span className="text-xs text-gray-500 mt-0.5">{student.email}</span>
+                       </div>
+                     </div>
+                   </div>
+ 
+                   <div className="col-span-3 mb-2 md:mb-0">
+                       <select 
+                           className="w-full md:w-[90%] h-8 rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                           value={student.categoryId || ""}
+                           onChange={(e) => handleCategoryChange(student.id, e.target.value)}
+                       >
+                           <option value="">General (Todas)</option>
+                           {categories.map(cat => (
+                               <option key={cat.id} value={cat.id}>{cat.name}</option>
+                           ))}
+                       </select>
+                   </div>
+ 
+                   <div className="col-span-2 flex items-center justify-start md:justify-center mb-2 md:mb-0">
+                     <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${student.credits > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                         {student.credits} Clases
+                     </div>
+                   </div>
+ 
+                   <div className="col-span-2 text-right hidden md:block text-sm text-gray-500">
+                     {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
+                   </div>
+ 
+                   <div className="col-span-1 flex justify-end md:justify-center mt-2 md:mt-0">
+                      <Button 
+                         size="sm" 
+                         variant="outline" 
+                         className="h-8 w-8 p-0 md:h-9 md:w-auto md:px-3 gap-2"
+                         onClick={() => openCreditModal(student)}
+                         title="Asignar Pack de Clases"
+                      >
+                         <CreditCard className="h-4 w-4" />
+                         <span className="hidden md:inline">Cargar</span>
+                      </Button>
+                   </div>
+ 
+                 </div>
+               ))}
+             </div>
+           </div>
         )}
       </div>
 
@@ -221,6 +252,7 @@ export default function StudentsPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
+                
                 <div className="space-y-2">
                   <Label>Nombre Completo</Label>
                   <Input 
@@ -230,6 +262,7 @@ export default function StudentsPage() {
                     onChange={e => setFormData({...formData, fullName: e.target.value})}
                   />
                 </div>
+                
                 <div className="space-y-2">
                   <Label>Correo Electrónico</Label>
                   <Input 
@@ -239,10 +272,28 @@ export default function StudentsPage() {
                     value={formData.email}
                     onChange={e => setFormData({...formData, email: e.target.value})}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Categoría / Disciplina</Label>
+                  <div className="relative">
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pl-9 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={formData.categoryId}
+                      onChange={e => setFormData({...formData, categoryId: e.target.value})}
+                    >
+                      <option value="">Sin Categoría (Acceso General)</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Si ya existe, se vinculará. Si es nuevo, se crea cuenta.
+                    El alumno solo podrá reservar clases de esta categoría.
                   </p>
                 </div>
+
                 <div className="pt-4 flex gap-3">
                   <Button type="button" variant="outline" className="flex-1" onClick={() => setIsModalOpen(false)}>
                     Cancelar
@@ -268,7 +319,6 @@ export default function StudentsPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleAssignCredits} className="space-y-4">
-                
                 <div className="space-y-2">
                   <Label>Nombre del Pack</Label>
                   <Input 
@@ -278,7 +328,6 @@ export default function StudentsPage() {
                     onChange={e => setCreditForm({...creditForm, name: e.target.value})}
                   />
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                     <Label>Cantidad Clases</Label>
@@ -297,7 +346,6 @@ export default function StudentsPage() {
                         />
                     </div>
                     </div>
-                    
                     <div className="space-y-2">
                     <Label>Días de Validez</Label>
                     <div className="relative">
@@ -316,7 +364,6 @@ export default function StudentsPage() {
                     </div>
                     </div>
                 </div>
-
                 <div className="pt-4 flex gap-3">
                   <Button type="button" variant="outline" className="flex-1" onClick={() => setIsCreditModalOpen(false)}>
                     Cancelar
@@ -330,7 +377,6 @@ export default function StudentsPage() {
           </Card>
         </div>
       )}
-
     </div>
   );
 }

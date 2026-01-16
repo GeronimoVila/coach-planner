@@ -1,13 +1,14 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@repo/database';
+import { CreateStudentDto } from './dto/create-student.dto'; 
 
 @Injectable()
 export class StudentsService {
   constructor(private readonly db: DatabaseService) {}
 
-  async create(data: { email: string; fullName: string }, orgId: string) {
+  async create(data: CreateStudentDto, orgId: string) {
     let user = await this.db.user.findUnique({
       where: { email: data.email },
     });
@@ -42,6 +43,7 @@ export class StudentsService {
         userId: user.id,
         organizationId: orgId,
         role: Role.STUDENT,
+        categoryId: data.categoryId, 
       },
       include: {
         user: true,
@@ -51,18 +53,10 @@ export class StudentsService {
 
   async findAll(orgId: string) {
     const memberships = await this.db.membership.findMany({
-      where: {
-        organizationId: orgId,
-        role: Role.STUDENT, 
-      },
+      where: { organizationId: orgId, role: Role.STUDENT },
       include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
-        },
+        user: { select: { id: true, fullName: true, email: true } },
+        category: { select: { id: true, name: true } }
       },
       orderBy: { joinedAt: 'desc' },
     });
@@ -75,7 +69,24 @@ export class StudentsService {
       joinedAt: m.joinedAt,
       role: m.role,
       credits: m.credits,
+      categoryName: m.category?.name || 'General',
+      categoryId: m.categoryId,
     }));
+  }
+
+  async update(userId: string, orgId: string, data: { categoryId?: number | null }) {
+    const membership = await this.db.membership.findUnique({
+      where: { userId_organizationId: { userId, organizationId: orgId } }
+    });
+
+    if (!membership) throw new NotFoundException('Alumno no encontrado');
+
+    return this.db.membership.update({
+      where: { id: membership.id },
+      data: {
+        categoryId: data.categoryId
+      }
+    });
   }
 
   async findMe(userId: string, orgId: string) {
@@ -88,6 +99,12 @@ export class StudentsService {
       },
       include: {
         user: true,
+        creditPackages: {
+          where: {
+            expiresAt: { gt: new Date() },
+            remainingAmount: { gt: 0 },
+          },
+        },
       }
     });
 
@@ -95,12 +112,18 @@ export class StudentsService {
       return { credits: 0, fullName: '', bookingsCount: 0 };
     }
 
+    const realValidCredits = membership.creditPackages.reduce(
+      (sum, pkg) => sum + pkg.remainingAmount, 
+      0
+    );
+
     return {
       id: membership.userId,
       fullName: membership.user.fullName,
       email: membership.user.email,
-      credits: membership.credits,
+      credits: realValidCredits,
       role: membership.role,
+      categoryId: membership.categoryId,
     };
   }
 }

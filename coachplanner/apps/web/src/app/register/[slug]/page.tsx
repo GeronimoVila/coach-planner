@@ -15,9 +15,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Tag } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+interface Category {
+  id: number;
+  name: string;
+}
 
 export default function RegisterPage() {
   const params = useParams();
@@ -25,6 +30,7 @@ export default function RegisterPage() {
   const slug = params.slug as string;
 
   const [gymName, setGymName] = useState<string>(''); 
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isCheckingGym, setIsCheckingGym] = useState(true);
   const [gymError, setGymError] = useState(false);
 
@@ -33,6 +39,7 @@ export default function RegisterPage() {
     name: '',
     email: '',
     password: '',
+    categoryId: '',
   });
 
   useEffect(() => {
@@ -43,6 +50,11 @@ export default function RegisterPage() {
         
         const data = await res.json();
         setGymName(data.name);
+        
+        if (data.categories && Array.isArray(data.categories)) {
+            setCategories(data.categories);
+        }
+
       } catch (error) {
         setGymError(true);
       } finally {
@@ -62,7 +74,10 @@ export default function RegisterPage() {
       const res = await fetch(`${API_URL}/auth/register/${slug}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+            ...formData,
+            categoryId: formData.categoryId ? Number(formData.categoryId) : undefined
+        }),
       });
 
       const data = await res.json();
@@ -72,7 +87,7 @@ export default function RegisterPage() {
       }
 
       toast.success(`¡Bienvenido a ${gymName}!`, {
-        description: 'Tu cuenta ha sido creada exitosamente.',
+        description: 'Tu cuenta ha sido creada exitosamente. Inicia sesión para continuar.',
       });
       
       router.push('/login'); 
@@ -163,6 +178,30 @@ export default function RegisterPage() {
                 }
               />
             </div>
+
+            {categories.length > 0 && (
+                <div className="space-y-2">
+                <Label htmlFor="category">Disciplina / Categoría</Label>
+                <div className="relative">
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <select
+                    id="category"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pl-9 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={formData.categoryId}
+                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                    required
+                    disabled={isSubmitting}
+                    >
+                    <option value="">Selecciona una opción...</option>
+                    {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                        </option>
+                    ))}
+                    </select>
+                </div>
+                </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
