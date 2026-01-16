@@ -9,9 +9,10 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { StudentsModule } from './students/students.module';
 import { CreditPackagesModule } from './credit-packages/credit-packages.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, CategoriesModule, ClassesModule, OrganizationsModule, StudentsModule, CreditPackagesModule, BookingsModule],
+  imports: [DatabaseModule, AuthModule, CategoriesModule, ClassesModule, OrganizationsModule, StudentsModule, CreditPackagesModule, BookingsModule, UsersModule],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -10,9 +10,12 @@ export class OrganizationsService {
     return this.db.organization.findUnique({
       where: { id: orgId },
       select: { 
+        name: true,
+        slug: true,
         slotDurationMinutes: true,
         openHour: true,
-        closeHour: true
+        closeHour: true,
+        cancellationWindow: true
       }
     });
   }
@@ -20,9 +23,7 @@ export class OrganizationsService {
   async updateConfig(orgId: string, dto: UpdateConfigDto) {
     return this.db.organization.update({
       where: { id: orgId },
-      data: {
-        ...dto,
-      },
+      data: { ...dto },
     });
   }
 }

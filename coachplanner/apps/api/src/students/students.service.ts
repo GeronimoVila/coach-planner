@@ -99,6 +99,7 @@ export class StudentsService {
       },
       include: {
         user: true,
+        category: true,
         creditPackages: {
           where: {
             expiresAt: { gt: new Date() },
@@ -124,6 +125,7 @@ export class StudentsService {
       credits: realValidCredits,
       role: membership.role,
       categoryId: membership.categoryId,
+      category: membership.category,
     };
   }
 }

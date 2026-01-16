@@ -5,7 +5,18 @@ import { useAuth } from '@/context/auth-context';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, LayoutDashboard, CalendarDays, Users, Dumbbell } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { 
+  Loader2, 
+  LayoutDashboard, 
+  CalendarDays, 
+  Users, 
+  Dumbbell, 
+  Link as LinkIcon, 
+  Copy, 
+  Check, 
+  ExternalLink 
+} from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -15,9 +26,17 @@ export default function DashboardPage() {
   const [studentStats, setStudentStats] = useState({ credits: 0, bookings: 0 });
   const [loadingStats, setLoadingStats] = useState(false);
 
+  const [inviteLink, setInviteLink] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+
   useEffect(() => {
-    if (user && user.role === 'STUDENT') {
+    if (!user) return;
+
+    if (user.role === 'STUDENT') {
       fetchStudentStats();
+    } else if (user.role === 'OWNER' || user.role === 'ADMIN') {
+      fetchOwnerConfig();
     }
   }, [user]);
 
@@ -35,6 +54,28 @@ export default function DashboardPage() {
     } finally {
       setLoadingStats(false);
     }
+  };
+
+  const fetchOwnerConfig = async () => {
+    setLoadingConfig(true);
+    try {
+        const configRes = await api.get('/organizations/config');
+        if (typeof window !== 'undefined' && configRes.data.slug) {
+            const origin = window.location.origin;
+            setInviteLink(`${origin}/register/${configRes.data.slug}`);
+        }
+    } catch (error) {
+        console.error("Error cargando config para link", error);
+    } finally {
+        setLoadingConfig(false);
+    }
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    toast.success('Enlace copiado al portapapeles');
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (isLoading) {
@@ -66,49 +107,85 @@ export default function DashboardPage() {
 
         {/* --- VISTA DE PROFESOR --- */}
         {isOwner ? (
-          <div className="grid gap-6 md:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Clases Activas</CardTitle>
-                <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">0</div>
-                <p className="text-xs text-muted-foreground">Programadas esta semana</p>
-                <Link href="/categories">
-                  <Button className="w-full mt-4" variant="outline">Configurar Categorías</Button>
-                </Link>
-              </CardContent>
-            </Card>
+          <div className="space-y-6">
+            
+            {inviteLink && (
+                <Card className="border-blue-100 bg-blue-50/50">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center gap-2 text-blue-700">
+                            <LinkIcon className="h-5 w-5" /> Enlace de Registro para Alumnos
+                        </CardTitle>
+                        <CardDescription>
+                            Comparte este link con tus alumnos para que se registren directamente en tu gimnasio.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                                <Input 
+                                    value={inviteLink} 
+                                    readOnly 
+                                    className="pr-10 bg-white border-blue-200 text-gray-600 font-mono text-sm" 
+                                />
+                            </div>
+                            <Button onClick={copyToClipboard} className="shrink-0 gap-2 min-w-25">
+                                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                {copied ? 'Copiado' : 'Copiar'}
+                            </Button>
+                            <Link href={inviteLink} target="_blank">
+                                <Button variant="ghost" size="icon" title="Probar enlace">
+                                    <ExternalLink className="h-4 w-4 text-gray-500" />
+                                </Button>
+                            </Link>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Alumnos Totales</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">0</div>
-                <p className="text-xs text-muted-foreground">+0% desde el mes pasado</p>
-                <Link href="/students">
-                  <Button className="w-full mt-4" variant="outline">Ver Alumnos</Button>
-                </Link>
-              </CardContent>
-            </Card>
+            <div className="grid gap-6 md:grid-cols-3">
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Clases Activas</CardTitle>
+                    <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">--</div>
+                    <p className="text-xs text-muted-foreground">Programadas esta semana</p>
+                    <Link href="/categories">
+                    <Button className="w-full mt-4" variant="outline">Configurar Categorías</Button>
+                    </Link>
+                </CardContent>
+                </Card>
 
-            <Card className="bg-primary/5 border-primary/20">
-              <CardHeader>
-                <CardTitle>Acciones Rápidas</CardTitle>
-                <CardDescription>Atajos para tu gestión</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-2">
-                <Link href="/classes">
-                  <Button className="w-full">Gestionar Horarios</Button>
-                </Link>
-                <Link href="/students">
-                  <Button variant="secondary" className="w-full">Invitar Alumnos</Button>
-                </Link>
-              </CardContent>
-            </Card>
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Alumnos Totales</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">--</div>
+                    <p className="text-xs text-muted-foreground">Activos en el sistema</p>
+                    <Link href="/students">
+                    <Button className="w-full mt-4" variant="outline">Ver Alumnos</Button>
+                    </Link>
+                </CardContent>
+                </Card>
+
+                <Card className="bg-primary/5 border-primary/20">
+                <CardHeader>
+                    <CardTitle>Acciones Rápidas</CardTitle>
+                    <CardDescription>Atajos para tu gestión</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2">
+                    <Link href="/classes">
+                    <Button className="w-full">Gestionar Horarios</Button>
+                    </Link>
+                    <Link href="/students">
+                    <Button variant="secondary" className="w-full">Cargar Créditos</Button>
+                    </Link>
+                </CardContent>
+                </Card>
+            </div>
           </div>
         ) : (
           
@@ -120,7 +197,7 @@ export default function DashboardPage() {
                 <CalendarDays className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">0</div>
+                <div className="text-2xl font-bold">--</div>
                 <p className="text-xs text-muted-foreground">Reservas confirmadas</p>
               </CardContent>
             </Card>
@@ -131,7 +208,6 @@ export default function DashboardPage() {
                 <Dumbbell className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {/* MOSTRAR CRÉDITOS REALES */}
                 <div className="text-2xl font-bold text-primary">
                   {loadingStats ? (
                     <Loader2 className="h-6 w-6 animate-spin" />
