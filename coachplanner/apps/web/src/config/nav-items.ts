@@ -16,6 +16,6 @@ export const ownerNavItems = [
 
 export const studentNavItems = [
   { title: 'Inicio', href: '/', icon: LayoutDashboard },
-  { title: 'Mis Reservas', href: '/my-bookings', icon: CalendarDays },
+  { title: 'Hacer Reserva', href: '/book', icon: CalendarDays },
   { title: 'Créditos', href: '/credits', icon: CreditCard },
 ];

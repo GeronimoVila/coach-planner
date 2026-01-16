@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Delete, Param } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -25,5 +25,11 @@ export class BookingsController {
     const userId = req.user.userId;
     const orgId = req.user.orgId;
     return this.bookingsService.findMyBookings(userId, orgId);
+  }
+
+  @Delete(':classId')
+  @Roles(Role.STUDENT)
+  cancel(@Request() req, @Param('classId') classId: string) {
+    return this.bookingsService.cancelByStudent(req.user.userId, req.user.orgId, classId);
   }
 }

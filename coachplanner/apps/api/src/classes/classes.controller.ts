@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request, Query, BadRequestException, Patch } from '@nestjs/common';
 import { ClassesService } from './classes.service';
 import { CreateClassDto } from './dto/create-class.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -25,6 +25,17 @@ export class ClassesController {
     return this.classesService.create(createClassDto, orgId, instructorId);
   }
 
+  @Get('schedule')
+  getSchedule(
+    @Request() req,
+    @Query('start') start: string,
+    @Query('end') end: string
+  ) {
+    const orgId = req.user.orgId;
+    const userId = req.user.userId;
+    return this.classesService.getSchedule(orgId, userId, start, end);
+  }
+
   @Get()
   findAll(@Request() req, @Query('start') start?: string, @Query('end') end?: string) {
     const orgId = req.user.organizationId || req.user.orgId;
@@ -42,5 +53,11 @@ export class ClassesController {
   remove(@Param('id') id: string, @Request() req) {
     const orgId = req.user.organizationId || req.user.orgId;
     return this.classesService.remove(id, orgId);
+  }
+
+  @Patch(':id/cancel')
+  @Roles(Role.OWNER, Role.ADMIN, Role.INSTRUCTOR)
+  cancelSession(@Request() req, @Param('id') id: string) {
+    return this.classesService.cancelClassSession(id, req.user.orgId);
   }
 }

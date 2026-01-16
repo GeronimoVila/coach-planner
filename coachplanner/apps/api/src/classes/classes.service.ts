@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateClassDto } from './dto/create-class.dto';
 import { DatabaseService } from 'src/database/database.service';
+import { BookingStatus } from '@repo/database';
 
 @Injectable()
 export class ClassesService {
@@ -61,5 +62,87 @@ export class ClassesService {
   async remove(id: string, orgId: string) {
     await this.findOne(id, orgId);
     return this.db.classSession.delete({ where: { id } });
+  }
+
+  async getSchedule(orgId: string, userId: string, startStr: string, endStr: string) {
+    const startDate = new Date(startStr);
+    const endDate = new Date(endStr);
+
+    const classes = await this.db.classSession.findMany({
+      where: {
+        organizationId: orgId,
+        startTime: {
+          gte: startDate,
+          lte: endDate,
+        },
+        isCancelled: false,
+      },
+      include: {
+        instructor: { select: { fullName: true } },
+        category: { select: { name: true } },
+        bookings: {
+          where: { status: BookingStatus.CONFIRMED },
+          select: { userId: true }
+        }
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    return classes.map((cls) => {
+      const isBookedByMe = cls.bookings.some(b => b.userId === userId);
+      
+      const bookedCount = cls.bookings.length;
+
+      return {
+        id: cls.id,
+        title: cls.title,
+        description: cls.description,
+        startTime: cls.startTime,
+        endTime: cls.endTime,
+        instructorName: cls.instructor.fullName,
+        categoryName: cls.category?.name || 'General',
+        categoryId: cls.categoryId,
+        capacity: cls.capacity,
+        bookedCount: bookedCount,
+        isFull: bookedCount >= cls.capacity,
+        availableSlots: cls.capacity - bookedCount,
+        isBookedByMe: isBookedByMe, 
+      };
+    });
+  }
+  async cancelClassSession(id: string, orgId: string) {
+    return this.db.$transaction(async (tx) => {
+      const session = await tx.classSession.findUnique({
+        where: { id, organizationId: orgId },
+        include: { bookings: { where: { status: BookingStatus.CONFIRMED } } } // Traer reservas activas
+      });
+
+      if (!session) throw new NotFoundException('Clase no encontrada');
+      if (session.isCancelled) throw new BadRequestException('La clase ya estaba cancelada');
+
+      await tx.classSession.update({
+        where: { id },
+        data: { isCancelled: true }
+      });
+
+      for (const booking of session.bookings) {
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { status: BookingStatus.CANCELLED }
+        });
+
+        await tx.creditPackage.update({
+          where: { id: booking.creditPackageId },
+          data: { remainingAmount: { increment: 1 } }
+        });
+        
+        await tx.membership.update({
+            where: { userId_organizationId: { userId: booking.userId, organizationId: orgId } },
+            data: { credits: { increment: 1 } }
+        });
+      }
+
+      return { message: `Clase cancelada. Se reembolsaron ${session.bookings.length} créditos.` };
+    });
   }
 }

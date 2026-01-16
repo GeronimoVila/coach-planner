@@ -153,10 +153,12 @@ export default function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+              <Link href="/book">
                 <Button variant="secondary" className="w-full">
                   Ver Calendario
                 </Button>
-              </CardContent>
+              </Link>
+            </CardContent>
             </Card>
           </div>
         )}

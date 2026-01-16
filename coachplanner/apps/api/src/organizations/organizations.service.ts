@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
+import { UpdateConfigDto } from './dto/update-config.dto';
 
 @Injectable()
 export class OrganizationsService {
@@ -16,10 +17,12 @@ export class OrganizationsService {
     });
   }
 
-  async updateConfig(orgId: string, duration: number) {
+  async updateConfig(orgId: string, dto: UpdateConfigDto) {
     return this.db.organization.update({
       where: { id: orgId },
-      data: { slotDurationMinutes: duration }
+      data: {
+        ...dto,
+      },
     });
   }
 }

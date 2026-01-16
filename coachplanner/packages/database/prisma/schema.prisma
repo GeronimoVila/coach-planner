@@ -49,6 +49,7 @@ model Organization {
   
   // Configuración
   slotDurationMinutes Int      @default(60) @map("slot_duration")
+  cancellationWindow  Int      @default(2)  @map("cancellation_window")
   openHour            Int      @default(7)  @map("open_hour")
   closeHour           Int      @default(22) @map("close_hour")
   createdAt           DateTime @default(now()) @map("created_at")

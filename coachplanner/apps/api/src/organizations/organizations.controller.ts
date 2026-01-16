@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Patch, Request, UseGuards } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
+import { UpdateConfigDto } from './dto/update-config.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
@@ -18,8 +19,7 @@ export class OrganizationsController {
 
   @Patch('config')
   @Roles(Role.OWNER, Role.ADMIN)
-  updateConfig(@Request() req, @Body('slotDurationMinutes') duration: number) {
-    const orgId = req.user.organizationId || req.user.orgId;
-    return this.organizationsService.updateConfig(orgId, duration);
+  updateConfig(@Request() req, @Body() updateConfigDto: UpdateConfigDto) {
+    return this.organizationsService.updateConfig(req.user.orgId, updateConfigDto);
   }
 }

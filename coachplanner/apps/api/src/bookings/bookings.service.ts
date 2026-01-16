@@ -7,6 +7,7 @@ import {
 import { DatabaseService } from 'src/database/database.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus } from '@repo/database';
+import { ForbiddenException } from '@nestjs/common';
 
 @Injectable()
 export class BookingsService {
@@ -107,6 +108,55 @@ export class BookingsService {
       orderBy: {
         classSession: { startTime: 'asc' },
       },
+    });
+  }
+
+  async cancelByStudent(userId: string, orgId: string, classId: string) {
+    return this.db.$transaction(async (tx) => {
+      const org = await tx.organization.findUnique({
+        where: { id: orgId },
+        select: { cancellationWindow: true }
+      });
+
+      if (!org) throw new NotFoundException('Gimnasio no encontrado');
+
+      const booking = await tx.booking.findFirst({
+        where: {
+          userId,
+          classSessionId: classId,
+          status: BookingStatus.CONFIRMED
+        },
+        include: { classSession: true }
+      });
+
+      if (!booking) throw new NotFoundException('No tienes una reserva activa para esta clase');
+
+      const now = new Date();
+      const classStart = new Date(booking.classSession.startTime);
+      const diffInHours = (classStart.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+      if (diffInHours < org.cancellationWindow) {
+        throw new ForbiddenException(
+          `Ya no puedes cancelar. Debes hacerlo con ${org.cancellationWindow} horas de anticipación.`
+        );
+      }
+
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: { status: BookingStatus.CANCELLED }
+      });
+
+      await tx.creditPackage.update({
+        where: { id: booking.creditPackageId },
+        data: { remainingAmount: { increment: 1 } }
+      });
+
+      await tx.membership.update({
+        where: { userId_organizationId: { userId, organizationId: orgId } },
+        data: { credits: { increment: 1 } }
+      });
+
+      return { message: 'Reserva cancelada y crédito devuelto' };
     });
   }
 }

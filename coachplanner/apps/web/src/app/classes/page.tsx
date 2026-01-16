@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, ChevronLeft, ChevronRight, X, User, Plus, 
-  Clock, Trash2, Check, Settings2
+  Clock, Trash2, Check, Ban
 } from 'lucide-react';
 import useMediaQuery from '@/hooks/use-media-query';
 
@@ -31,6 +31,7 @@ interface ClassSession {
   category: Category;
   _count?: { bookings: number };
   instructor?: { name: string, avatarUrl?: string }; 
+  isCancelled?: boolean;
 }
 
 const getStartOfWeek = (date: Date) => {
@@ -68,7 +69,9 @@ const formatDuration = (minutes: number) => {
   return `${m}m`;
 };
 
-const getCategoryStyles = (categoryId: number) => {
+const getCategoryStyles = (categoryId: number, isCancelled = false) => {
+  if (isCancelled) return 'bg-gray-100 border-l-4 border-gray-400 text-gray-400 opacity-60';
+
   const styles: { [key: number]: string } = {
     1: 'bg-blue-50 border-l-4 border-blue-500 text-blue-700', 
     2: 'bg-purple-50 border-l-4 border-purple-500 text-purple-700',
@@ -88,6 +91,7 @@ export default function ClassesPage() {
   const [loading, setLoading] = useState(true);
 
   const [intervalMinutes, setIntervalMinutes] = useState(60); 
+  const [cancellationWindow, setCancellationWindow] = useState(2);
   const [gymHours, setGymHours] = useState({ start: 7, end: 22 });
 
   const [weekStart, setWeekStart] = useState(getStartOfWeek(new Date()));
@@ -126,6 +130,7 @@ export default function ClassesPage() {
         
         if (configRes.data) {
           if (configRes.data.slotDurationMinutes) setIntervalMinutes(configRes.data.slotDurationMinutes);
+          if (configRes.data.cancellationWindow !== undefined) setCancellationWindow(configRes.data.cancellationWindow);
           if (configRes.data.openHour !== undefined && configRes.data.closeHour !== undefined) {
              setGymHours({ start: configRes.data.openHour, end: configRes.data.closeHour });
           }
@@ -138,10 +143,12 @@ export default function ClassesPage() {
     }
   };
 
-  const handleDurationChange = async (newDuration: number) => {
-    setIntervalMinutes(newDuration);
+  const handleConfigChange = async (key: string, value: number) => {
+    if (key === 'slotDurationMinutes') setIntervalMinutes(value);
+    if (key === 'cancellationWindow') setCancellationWindow(value);
+    
     try {
-      await api.patch('/organizations/config', { slotDurationMinutes: newDuration });
+      await api.patch('/organizations/config', { [key]: value });
       toast.success('Configuración guardada');
     } catch (error) {
       toast.error('Error al guardar configuración');
@@ -216,16 +223,21 @@ export default function ClassesPage() {
     } finally {
       setSubmitting(false);
     }
-};
+  };
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
+  const handleCancelClass = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); 
-    if (!confirm('¿Borrar esta clase?')) return;
+    if (!confirm('¿Cancelar esta clase? Se reembolsarán los créditos a todos los inscriptos.')) return;
+    
     try {
-      await api.delete(`/classes/${id}`);
-      setClasses(classes.filter(c => c.id !== id));
-      toast.success('Eliminada');
-    } catch (error) { toast.error('Error al eliminar'); }
+      await api.patch(`/classes/${id}/cancel`);
+      
+      setClasses(prev => prev.map(c => c.id === id ? { ...c, isCancelled: true } : c));
+      
+      toast.success('Clase cancelada y créditos devueltos');
+    } catch (error: any) { 
+        toast.error(error.response?.data?.message || 'Error al cancelar'); 
+    }
   };
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -246,6 +258,8 @@ export default function ClassesPage() {
   const getClassInSlot = (day: Date, slotMinutes: number) => {
     const safeInterval = Math.max(15, intervalMinutes);
     return classes.find(c => {
+      if (c.isCancelled) return false; 
+
       const d = new Date(c.startTime);
       const classTotalMinutes = d.getHours() * 60 + d.getMinutes();
       return d.getDate() === day.getDate() && 
@@ -273,7 +287,7 @@ export default function ClassesPage() {
         
         <div className="flex items-center gap-2">
           {isDesktop ? (
-             <>
+              <>
                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border mr-2">
                   <span className="text-xs font-medium text-gray-500">Duración:</span>
                   <Input 
@@ -282,9 +296,21 @@ export default function ClassesPage() {
                     max="360"
                     className="w-14 h-7 text-center px-1 text-sm bg-white border-gray-200 focus-visible:ring-1"
                     value={intervalMinutes}
-                    onChange={(e) => handleDurationChange(Number(e.target.value))}
+                    onChange={(e) => handleConfigChange('slotDurationMinutes', Number(e.target.value))}
                   />
                   <span className="text-xs text-gray-400">min</span>
+               </div>
+
+               <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border mr-2">
+                  <span className="text-xs font-medium text-gray-500">Cancelación (hs):</span>
+                  <Input 
+                    type="number" 
+                    min="0" 
+                    max="72"
+                    className="w-12 h-7 text-center px-1 text-sm bg-white border-gray-200 focus-visible:ring-1"
+                    value={cancellationWindow}
+                    onChange={(e) => handleConfigChange('cancellationWindow', Number(e.target.value))}
+                  />
                </div>
                
                <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border mr-2">
@@ -298,9 +324,9 @@ export default function ClassesPage() {
                       <ChevronRight className="h-4 w-4" />
                   </Button>
               </div>
-             </>
+              </>
           ) : (
-             null
+              null
           )}
           
           <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold ml-2">
@@ -362,7 +388,7 @@ export default function ClassesPage() {
                     </div>
                     {weekDays.map((day, i) => {
                       const activeClass = getClassInSlot(day, minutes);
-                      const categoryStyle = activeClass ? getCategoryStyles(activeClass.category.id) : '';
+                      const categoryStyle = activeClass ? getCategoryStyles(activeClass.category.id, activeClass.isCancelled) : '';
 
                       return (
                         <div 
@@ -372,13 +398,16 @@ export default function ClassesPage() {
                         >
                           {activeClass ? (
                             <div className={`h-full w-full rounded-lg p-2 flex flex-col justify-between shadow-sm relative group/card ${categoryStyle}`}>
-                              <button 
-                                onClick={(e) => handleDelete(e, activeClass.id)}
-                                className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-red-500 opacity-0 group-hover/card:opacity-100 hover:bg-red-100 transition-all z-10"
-                                title="Eliminar clase"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
+                              
+                              {!activeClass.isCancelled && (
+                                  <button 
+                                    onClick={(e) => handleCancelClass(e, activeClass.id)}
+                                    className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-red-500 opacity-0 group-hover/card:opacity-100 hover:bg-red-100 transition-all z-10"
+                                    title="Cancelar clase y devolver créditos"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                              )}
 
                               <div>
                                 <h3 className="font-bold text-sm truncate pr-4">{activeClass.title}</h3>
@@ -411,7 +440,9 @@ export default function ClassesPage() {
         <div className="md:hidden space-y-4 pb-20">
           {timeSlots.map((minutes) => {
              const activeClass = getClassInSlot(selectedDate, minutes);
-             const categoryStyle = activeClass ? getCategoryStyles(activeClass.category.id) : '';
+             if (!activeClass) return null;
+
+             const categoryStyle = getCategoryStyles(activeClass.category.id, activeClass.isCancelled);
 
              return (
                <div key={minutes} className="flex gap-4">
@@ -420,44 +451,38 @@ export default function ClassesPage() {
                  </div>
                  
                  <div className="flex-1">
-                    {activeClass ? (
-                       <div className={`rounded-xl p-4 shadow-sm flex flex-col gap-2 relative ${categoryStyle.replace('border-l-4', 'border-l-[6px]')}`}>
-                         <div className="flex justify-between items-start">
-                           <div>
-                             <h3 className="font-bold text-lg">{activeClass.title}</h3>
-                             <p className="text-sm opacity-80">{activeClass.category.name}</p>
-                           </div>
-                           <Button 
+                    <div className={`rounded-xl p-4 shadow-sm flex flex-col gap-2 relative ${categoryStyle.replace('border-l-4', 'border-l-[6px]')}`}>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-bold text-lg">{activeClass.title}</h3>
+                          <p className="text-sm opacity-80">{activeClass.category.name}</p>
+                        </div>
+                        
+                        {!activeClass.isCancelled && (
+                            <Button 
                               variant="ghost" 
                               size="icon" 
                               className="h-8 w-8 -mt-2 -mr-2 text-inherit opacity-70 hover:bg-white/20 hover:text-red-600"
-                              onClick={(e) => handleDelete(e, activeClass.id)}
+                              onClick={(e) => handleCancelClass(e, activeClass.id)}
                             >
                               <Trash2 className="h-4 w-4" />
-                           </Button>
-                         </div>
+                            </Button>
+                        )}
+                      </div>
 
-                         <div className="flex justify-between items-center mt-2">
-                           <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${activeClass._count?.bookings! >= activeClass.capacity ? 'bg-blue-100 text-blue-700' : 'bg-gray-100/80 text-gray-700'}`}>
-                             {activeClass._count?.bookings! >= activeClass.capacity && <Check className="h-3 w-3" />}
-                             <User className="h-3 w-3" />
-                             {activeClass._count?.bookings || 0} / {activeClass.capacity} {activeClass._count?.bookings! >= activeClass.capacity ? 'Completa' : 'Reservas'}
-                           </div>
-                           
-                           <div className="flex -space-x-2 relative z-0">
-                              <div className="h-7 w-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[9px]">U1</div>
-                              <div className="h-7 w-7 rounded-full bg-gray-300 border-2 border-white flex items-center justify-center text-[9px] z-10">I</div>
-                           </div>
-                         </div>
-                       </div>
-                    ) : (
-                       <button 
-                         onClick={() => handleSlotClick(selectedDate, minutes)}
-                         className="w-full h-24 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-50 hover:border-primary/50 hover:text-primary transition-colors"
-                       >
-                         <Plus className="h-6 w-6" />
-                       </button>
-                    )}
+                      <div className="flex justify-between items-center mt-2">
+                        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${activeClass._count?.bookings! >= activeClass.capacity ? 'bg-blue-100 text-blue-700' : 'bg-gray-100/80 text-gray-700'}`}>
+                          {activeClass._count?.bookings! >= activeClass.capacity && <Check className="h-3 w-3" />}
+                          <User className="h-3 w-3" />
+                          {activeClass._count?.bookings || 0} / {activeClass.capacity} {activeClass._count?.bookings! >= activeClass.capacity ? 'Completa' : 'Reservas'}
+                        </div>
+                        
+                        <div className="flex -space-x-2 relative z-0">
+                           <div className="h-7 w-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[9px]">U1</div>
+                           <div className="h-7 w-7 rounded-full bg-gray-300 border-2 border-white flex items-center justify-center text-[9px] z-10">I</div>
+                        </div>
+                      </div>
+                    </div>
                  </div>
                </div>
              )
