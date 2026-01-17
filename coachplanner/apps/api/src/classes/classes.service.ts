@@ -3,10 +3,14 @@ import { CreateClassDto } from './dto/create-class.dto';
 import { DatabaseService } from 'src/database/database.service';
 import { BookingStatus } from '@repo/database';
 import { CloneWeekDto } from './dto/clone-week.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ClassesService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly notifications: NotificationsService 
+  ) {}
 
   async create(createClassDto: CreateClassDto, orgId: string, instructorId: string) {
     if (createClassDto.startTime >= createClassDto.endTime) {
@@ -120,7 +124,7 @@ export class ClassesService {
     });
   }
   async cancelClassSession(id: string, orgId: string) {
-    return this.db.$transaction(async (tx) => {
+    const transactionResult = await this.db.$transaction(async (tx) => {
       const session = await tx.classSession.findUnique({
         where: { id, organizationId: orgId },
         include: { bookings: { where: { status: BookingStatus.CONFIRMED } } } 
@@ -151,8 +155,26 @@ export class ClassesService {
         });
       }
 
-      return { message: `Clase cancelada. Se reembolsaron ${session.bookings.length} créditos.` };
+      return { 
+        session,
+        message: `Clase cancelada. Se reembolsaron ${session.bookings.length} créditos.` 
+      };
     });
+
+    if (transactionResult.session.bookings.length > 0) {
+      const promises = transactionResult.session.bookings.map(booking => {
+        return this.notifications.create(
+          booking.userId,
+          'Clase Cancelada',
+          `El profesor ha cancelado la clase de "${transactionResult.session.title}" del ${transactionResult.session.startTime.toLocaleDateString()}. Se te ha reembolsado el crédito.`,
+          'WARNING'
+        );
+      });
+      
+      await Promise.all(promises);
+    }
+
+    return { message: transactionResult.message };
   }
 
   async cloneWeek(orgId: string, dto: CloneWeekDto) {

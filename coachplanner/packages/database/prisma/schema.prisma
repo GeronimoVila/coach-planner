@@ -38,6 +38,7 @@ model User {
   memberships        Membership[]   // Gyms a los que va
   instructedClasses  ClassSession[] // Clases que da
   bookings           Booking[]
+  notifications      Notification[]
 
   @@map("users")
 }
@@ -145,4 +146,18 @@ model Booking {
   user            User          @relation(fields: [userId], references: [id])
 
   @@map("bookings")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  isRead    Boolean  @default(false) @map("is_read")
+  type      String   @default("INFO") // INFO, WARNING, SUCCESS
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
 }

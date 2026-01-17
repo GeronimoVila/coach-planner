@@ -8,13 +8,17 @@ import { DatabaseService } from 'src/database/database.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus } from '@repo/database';
 import { ForbiddenException } from '@nestjs/common';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class BookingsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly notifications: NotificationsService
+  ) {}
 
   async create(userId: string, orgId: string, dto: CreateBookingDto) {
-    return this.db.$transaction(async (tx) => {
+    const bookingResult = await this.db.$transaction(async (tx) => {
       
       const membership = await tx.membership.findUnique({
         where: { userId_organizationId: { userId, organizationId: orgId } },
@@ -77,6 +81,7 @@ export class BookingsService {
           creditPackageId: targetPackage.id,
           status: BookingStatus.CONFIRMED,
         },
+        include: { classSession: true }
       });
 
       await tx.creditPackage.update({
@@ -91,6 +96,26 @@ export class BookingsService {
 
       return booking;
     });
+
+    try {
+      const dateStr = bookingResult.classSession.startTime.toLocaleDateString('es-ES', { 
+        weekday: 'long', 
+        day: 'numeric',
+        hour: '2-digit', 
+        minute:'2-digit' 
+      });
+      
+      await this.notifications.create(
+        userId,
+        'Reserva Confirmada ✅',
+        `Te esperamos en la clase de ${bookingResult.classSession.title} el ${dateStr}.`,
+        'SUCCESS'
+      );
+    } catch (error) {
+      console.error('Error enviando notificación de reserva:', error);
+    }
+
+    return bookingResult;
   }
 
   async findMyBookings(userId: string, orgId: string) {
@@ -112,7 +137,7 @@ export class BookingsService {
   }
 
   async cancelByStudent(userId: string, orgId: string, classId: string) {
-    return this.db.$transaction(async (tx) => {
+    const cancelResult = await this.db.$transaction(async (tx) => {
       const org = await tx.organization.findUnique({
         where: { id: orgId },
         select: { cancellationWindow: true }
@@ -156,7 +181,23 @@ export class BookingsService {
         data: { credits: { increment: 1 } }
       });
 
-      return { message: 'Reserva cancelada y crédito devuelto' };
+      return { 
+        className: booking.classSession.title,
+        message: 'Reserva cancelada y crédito devuelto' 
+      };
     });
+
+    try {
+      await this.notifications.create(
+        userId,
+        'Reserva Cancelada ↩️',
+        `Has cancelado tu asistencia a ${cancelResult.className}. Se te ha devuelto el crédito.`,
+        'INFO'
+      );
+    } catch (error) {
+       console.error('Error enviando notificación de cancelación:', error);
+    }
+
+    return { message: cancelResult.message };
   }
 }

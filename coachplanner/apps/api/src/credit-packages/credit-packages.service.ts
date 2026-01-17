@@ -1,10 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import { CreateCreditPackageDto } from './dto/create-credit-package.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class CreditPackagesService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly notifications: NotificationsService
+  ) {}
 
   async create(dto: CreateCreditPackageDto, orgId: string) {
     const membership = await this.db.membership.findUnique({
@@ -23,7 +27,7 @@ export class CreditPackagesService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + dto.daysValid);
 
-    return this.db.$transaction(async (tx) => {
+    const newPackage = await this.db.$transaction(async (tx) => {
       const creditPackage = await tx.creditPackage.create({
         data: {
           membershipId: membership.id,
@@ -43,6 +47,18 @@ export class CreditPackagesService {
 
       return creditPackage;
     });
+    try {
+        await this.notifications.create(
+          dto.studentId,
+          '¡Pack de Créditos Activado! 🎒',
+          `Se han acreditado ${dto.amount} clases del pack "${dto.name}". Vencen el ${expiresAt.toLocaleDateString()}.`,
+          'SUCCESS'
+        );
+    } catch (error) {
+        console.error('Error enviando notificación de paquete:', error);
+    }
+
+    return newPackage;
   }
 
   async findAllByStudent(studentId: string, orgId: string) {

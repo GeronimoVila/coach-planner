@@ -6,12 +6,14 @@ import { RegisterOwnerDto } from './dto/create-auth.dto';
 import { RegisterStudentDto } from './dto/register-student.dto'; 
 import { LoginDto } from './dto/login.dto';
 import { Role } from '@repo/database';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly db: DatabaseService,
-    private readonly jwtService: JwtService
+    private readonly jwtService: JwtService,
+    private readonly notifications: NotificationsService
   ) {}
 
   async register(dto: RegisterOwnerDto) {
@@ -25,7 +27,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(dto.password, salt);
 
     try {
-      return await this.db.$transaction(async (tx) => {
+      const result = await this.db.$transaction(async (tx) => {
         const user = await tx.user.create({
           data: {
             email: dto.email,
@@ -51,9 +53,24 @@ export class AuthService {
         return { 
             message: 'Usuario registrado correctamente', 
             userId: user.id,
-            slug: org.slug 
+            slug: org.slug,
+            user: user
         };
       });
+      try {
+        await this.notifications.create(
+          result.userId,
+          '¡Bienvenido a la Plataforma! 👋',
+          'Gracias por registrar tu negocio. Aquí podrás gestionar tus clases, alumnos y créditos.',
+          'INFO'
+        );
+      } catch (notifError) {
+        console.error('Error enviando notificación de bienvenida:', notifError);
+      }
+
+      const { user, ...response } = result;
+      return response;
+
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException('Error al registrar usuario');
@@ -75,6 +92,7 @@ export class AuthService {
     });
 
     let userIdToLink = '';
+    let isNewUser = false;
 
     if (existingUser) {
       
@@ -108,6 +126,7 @@ export class AuthService {
       });
       
       userIdToLink = newUser.id;
+      isNewUser = true;
     }
 
     try {
@@ -119,6 +138,22 @@ export class AuthService {
           categoryId: dto.categoryId, 
         }
       });
+
+      if (isNewUser) {
+        await this.notifications.create(
+            userIdToLink,
+            '¡Bienvenido! 👋',
+            `Gracias por registrarte. Te has unido exitosamente a ${organization.name}.`,
+            'INFO'
+        );
+      } else {
+        await this.notifications.create(
+            userIdToLink,
+            'Nueva Organización Agregado 🏋️',
+            `Te has unido exitosamente a ${organization.name}.`,
+            'SUCCESS'
+        );
+      }
 
       return { 
         message: existingUser 
