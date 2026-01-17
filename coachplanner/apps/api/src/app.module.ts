@@ -12,9 +12,10 @@ import { CreditPackagesModule } from './credit-packages/credit-packages.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { UsersModule } from './users/users.module';
 import { JobsModule } from './jobs/jobs.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, CategoriesModule, ClassesModule, OrganizationsModule, StudentsModule, CreditPackagesModule, BookingsModule, UsersModule, JobsModule],
+  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, CategoriesModule, ClassesModule, OrganizationsModule, StudentsModule, CreditPackagesModule, BookingsModule, UsersModule, JobsModule, DashboardModule],
   controllers: [AppController],
   providers: [AppService],
 })

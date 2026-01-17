@@ -37,6 +37,7 @@ model User {
   organizationsOwned Organization[] // Gyms que posee
   memberships        Membership[]   // Gyms a los que va
   instructedClasses  ClassSession[] // Clases que da
+  bookings           Booking[]
 
   @@map("users")
 }
@@ -141,6 +142,7 @@ model Booking {
 
   classSession    ClassSession  @relation(fields: [classSessionId], references: [id])
   creditPackage   CreditPackage @relation(fields: [creditPackageId], references: [id])
+  user            User          @relation(fields: [userId], references: [id])
 
   @@map("bookings")
 }

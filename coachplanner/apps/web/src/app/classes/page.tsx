@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, ChevronLeft, ChevronRight, X, User, Plus, 
-  Clock, Trash2, Check, Ban, Copy
+  Clock, Trash2, Check, Ban, Copy, Users
 } from 'lucide-react';
 import useMediaQuery from '@/hooks/use-media-query';
 
@@ -32,6 +32,13 @@ interface ClassSession {
   _count?: { bookings: number };
   instructor?: { name: string, avatarUrl?: string }; 
   isCancelled?: boolean;
+}
+
+interface ClassDetail extends ClassSession {
+    bookings: {
+        id: string;
+        user: { fullName: string; email: string };
+    }[];
 }
 
 const getStartOfWeek = (date: Date) => {
@@ -102,6 +109,9 @@ export default function ClassesPage() {
   const [formData, setFormData] = useState({
     title: '', description: '', start: '', end: '', capacity: 10, categoryId: ''
   });
+
+  const [viewClass, setViewClass] = useState<ClassDetail | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -190,6 +200,25 @@ export default function ClassesPage() {
     setIsModalOpen(true);
   };
 
+  const handleViewClass = async (e: React.MouseEvent, classId: string) => {
+      e.stopPropagation();
+      setIsLoadingDetails(true);
+      const basicInfo = classes.find(c => c.id === classId);
+      if (basicInfo) {
+          setViewClass({ ...basicInfo, bookings: [] });
+      }
+      
+      try {
+          const res = await api.get(`/classes/${classId}`);
+          setViewClass(res.data);
+      } catch (error) {
+          console.error(error);
+          toast.error("No se pudo cargar la lista de alumnos");
+      } finally {
+          setIsLoadingDetails(false);
+      }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -234,6 +263,8 @@ export default function ClassesPage() {
       
       setClasses(prev => prev.map(c => c.id === id ? { ...c, isCancelled: true } : c));
       
+      if (viewClass?.id === id) setViewClass(null);
+
       toast.success('Clase cancelada y créditos devueltos');
     } catch (error: any) { 
         toast.error(error.response?.data?.message || 'Error al cancelar'); 
@@ -444,7 +475,10 @@ export default function ClassesPage() {
                           onClick={() => !activeClass && handleSlotClick(day, minutes)}
                         >
                           {activeClass ? (
-                            <div className={`h-full w-full rounded-lg p-2 flex flex-col justify-between shadow-sm relative group/card ${categoryStyle}`}>
+                            <div 
+                                className={`h-full w-full rounded-lg p-2 flex flex-col justify-between shadow-sm relative group/card cursor-pointer hover:ring-2 ring-primary/20 transition-all ${categoryStyle}`}
+                                onClick={(e) => handleViewClass(e, activeClass.id)}
+                            >
                               
                               {!activeClass.isCancelled && (
                                   <button 
@@ -498,7 +532,10 @@ export default function ClassesPage() {
                  </div>
                  
                  <div className="flex-1">
-                    <div className={`rounded-xl p-4 shadow-sm flex flex-col gap-2 relative ${categoryStyle.replace('border-l-4', 'border-l-[6px]')}`}>
+                    <div 
+                        className={`rounded-xl p-4 shadow-sm flex flex-col gap-2 relative cursor-pointer ${categoryStyle.replace('border-l-4', 'border-l-[6px]')}`}
+                        onClick={(e) => handleViewClass(e, activeClass.id)}
+                    >
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="font-bold text-lg">{activeClass.title}</h3>
@@ -576,6 +613,70 @@ export default function ClassesPage() {
           </Card>
         </div>
       )}
+
+      {viewClass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-md shadow-xl rounded-xl animate-in fade-in zoom-in-95 duration-200">
+             <CardHeader className="border-b pb-4 relative">
+                <Button variant="ghost" size="icon" className="absolute right-4 top-4" onClick={() => setViewClass(null)}>
+                    <X className="h-5 w-5" />
+                </Button>
+                <div className="flex flex-col gap-1">
+                    <span className="text-xs font-bold uppercase text-primary tracking-wider">{viewClass.category.name}</span>
+                    <CardTitle className="text-2xl">{viewClass.title}</CardTitle>
+                    <p className="text-sm text-gray-500 flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        {new Date(viewClass.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
+                        {new Date(viewClass.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </p>
+                </div>
+             </CardHeader>
+             <CardContent className="pt-6">
+                <div className="mb-4">
+                    <h3 className="font-semibold flex items-center gap-2 mb-3">
+                        <Users className="h-5 w-5 text-gray-500" />
+                        Alumnos Inscriptos
+                        <span className="ml-auto text-xs font-normal bg-gray-100 px-2 py-1 rounded-full">
+                            {viewClass._count?.bookings || viewClass.bookings?.length || 0} / {viewClass.capacity}
+                        </span>
+                    </h3>
+                    
+                    {isLoadingDetails ? (
+                        <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-400" /></div>
+                    ) : (
+                        <div className="space-y-3 max-h-75 overflow-y-auto pr-1">
+                            {viewClass.bookings && viewClass.bookings.length > 0 ? (
+                                viewClass.bookings.map((booking) => (
+                                    <div key={booking.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-100">
+                                        <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
+                                            {booking.user.fullName[0].toUpperCase()}
+                                        </div>
+                                        <div className="overflow-hidden">
+                                            <p className="font-medium text-sm truncate">{booking.user.fullName}</p>
+                                            <p className="text-xs text-gray-500 truncate">{booking.user.email}</p>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-dashed">
+                                    <p className="text-sm">No hay alumnos inscriptos aún.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {viewClass.description && (
+                    <div className="mt-4 pt-4 border-t">
+                        <h4 className="text-sm font-semibold mb-1">Descripción</h4>
+                        <p className="text-sm text-gray-600">{viewClass.description}</p>
+                    </div>
+                )}
+             </CardContent>
+          </Card>
+        </div>
+      )}
+
     </div>
   );
 }

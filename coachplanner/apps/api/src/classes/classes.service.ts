@@ -50,7 +50,15 @@ export class ClassesService {
   async findOne(id: string, orgId: string) {
     const classSession = await this.db.classSession.findUnique({
       where: { id },
-      include: { bookings: true }
+      include: { 
+        category: true,
+        bookings: {
+          where: { status: BookingStatus.CONFIRMED }, 
+          include: { 
+             user: true
+          }
+        }
+      }
     });
 
     if (!classSession || classSession.organizationId !== orgId) {

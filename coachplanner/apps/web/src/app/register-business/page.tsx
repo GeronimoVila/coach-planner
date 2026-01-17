@@ -15,30 +15,72 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Briefcase } from 'lucide-react';
+import { Loader2, Briefcase, Eye, EyeOff } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 export default function RegisterBusinessPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     organizationName: '',
     fullName: '',
     email: '',
     password: '',
+    confirmPassword: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (
+      !formData.organizationName.trim() || 
+      !formData.fullName.trim() || 
+      !formData.email.trim() || 
+      !formData.password || 
+      !formData.confirmPassword
+    ) {
+      toast.warning('Faltan datos', {
+        description: 'Por favor, completa todos los campos para continuar.'
+      });
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Correo electrónico inválido', {
+        description: 'Por favor verifica que tenga el formato correcto (ej: usuario@gmail.com).'
+      });
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      toast.error('La contraseña es muy corta', {
+        description: 'Debe tener al menos 8 caracteres.'
+      });
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+        toast.error('Las contraseñas no coinciden');
+        return;
+    }
+
     setIsLoading(true);
 
     try {
       const res = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+            organizationName: formData.organizationName,
+            fullName: formData.fullName,
+            email: formData.email,
+            password: formData.password
+        }),
       });
 
       const data = await res.json();
@@ -78,7 +120,7 @@ export default function RegisterBusinessPage() {
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             
             <div className="space-y-2">
               <Label htmlFor="orgName">Nombre de tu Gimnasio / Marca</Label>
@@ -125,18 +167,55 @@ export default function RegisterBusinessPage() {
 
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="******"
-                required
-                minLength={6}
-                disabled={isLoading}
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="******"
+                  required
+                  disabled={isLoading}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="pr-10"
+                />
+                <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute right-0 top-0 h-full px-3 text-gray-500 hover:text-gray-700"
+                    onClick={() => setShowPassword(!showPassword)}
+                >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-[0.8rem] text-muted-foreground">Mínimo 8 caracteres</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+              <div className="relative">
+                <Input
+                    id="confirmPassword"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="******"
+                    required
+                    disabled={isLoading}
+                    value={formData.confirmPassword}
+                    onChange={(e) =>
+                    setFormData({ ...formData, confirmPassword: e.target.value })
+                    }
+                    className="pr-10"
+                />
+                <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="icon" 
+                    className="absolute right-0 top-0 h-full px-3 text-gray-500 hover:text-gray-700"
+                    onClick={() => setShowPassword(!showPassword)}
+                >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
