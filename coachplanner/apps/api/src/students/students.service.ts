@@ -56,22 +56,32 @@ export class StudentsService {
       where: { organizationId: orgId, role: Role.STUDENT },
       include: {
         user: { select: { id: true, fullName: true, email: true } },
-        category: { select: { id: true, name: true } }
+        category: { select: { id: true, name: true } },
+        creditPackages: {
+            where: {
+                remainingAmount: { gt: 0 },
+                expiresAt: { gt: new Date() }
+            }
+        }
       },
       orderBy: { joinedAt: 'desc' },
     });
 
-    return memberships.map((m) => ({
-      id: m.userId,
-      membershipId: m.id,
-      fullName: m.user.fullName,
-      email: m.user.email,
-      joinedAt: m.joinedAt,
-      role: m.role,
-      credits: m.credits,
-      categoryName: m.category?.name || 'General',
-      categoryId: m.categoryId,
-    }));
+    return memberships.map((m) => {
+      const realCredits = m.creditPackages.reduce((sum, pkg) => sum + pkg.remainingAmount, 0);
+
+      return {
+        id: m.userId,
+        membershipId: m.id,
+        fullName: m.user.fullName,
+        email: m.user.email,
+        joinedAt: m.joinedAt,
+        role: m.role,
+        credits: realCredits,
+        categoryName: m.category?.name || 'General',
+        categoryId: m.categoryId,
+      };
+    });
   }
 
   async update(userId: string, orgId: string, data: { categoryId?: number | null }) {

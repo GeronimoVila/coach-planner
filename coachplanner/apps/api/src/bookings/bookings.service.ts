@@ -151,7 +151,10 @@ export class BookingsService {
           classSessionId: classId,
           status: BookingStatus.CONFIRMED
         },
-        include: { classSession: true }
+        include: { 
+          classSession: true,
+          user: { select: { fullName: true } } 
+        }
       });
 
       if (!booking) throw new NotFoundException('No tienes una reserva activa para esta clase');
@@ -183,6 +186,9 @@ export class BookingsService {
 
       return { 
         className: booking.classSession.title,
+        studentName: booking.user.fullName,
+        instructorId: booking.classSession.instructorId,
+        classDate: booking.classSession.startTime,
         message: 'Reserva cancelada y crédito devuelto' 
       };
     });
@@ -194,10 +200,71 @@ export class BookingsService {
         `Has cancelado tu asistencia a ${cancelResult.className}. Se te ha devuelto el crédito.`,
         'INFO'
       );
+
+      const dateStr = cancelResult.classDate.toLocaleDateString('es-ES', { 
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
+      });
+
+      await this.notifications.create(
+        cancelResult.instructorId,
+        'Baja en tu clase 📢',
+        `El alumno ${cancelResult.studentName} canceló su asistencia a ${cancelResult.className} (${dateStr}).`,
+        'WARNING'
+      );
+
     } catch (error) {
-       console.error('Error enviando notificación de cancelación:', error);
+        console.error('Error enviando notificaciones de cancelación:', error);
     }
 
     return { message: cancelResult.message };
+  }
+
+  async getStudentHistory(userId: string, orgId: string) {
+    const bookings = await this.db.booking.findMany({
+      where: {
+        userId: userId,
+        classSession: {
+          organizationId: orgId,
+        },
+      },
+      include: {
+        classSession: {
+          include: {
+            instructor: { select: { fullName: true } }
+          }
+        }, 
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const historyLog: any[] = [];
+
+    bookings.forEach((booking) => {
+      historyLog.push({
+        id: booking.id + '_created',
+        action: 'RESERVED',
+        date: booking.createdAt,
+        className: booking.classSession.title,
+        instructorName: booking.classSession.instructor?.fullName || 'Sin instructor',
+        classDate: booking.classSession.startTime,
+        creditsMovement: -1,
+      });
+
+      if (booking.status === BookingStatus.CANCELLED) {
+        historyLog.push({
+          id: booking.id + '_cancelled',
+          action: 'CANCELLED',
+          date: (booking as any).updatedAt, 
+          className: booking.classSession.title,
+          instructorName: booking.classSession.instructor?.fullName || 'Sin instructor',
+          classDate: booking.classSession.startTime,
+          creditsMovement: 1,
+        });
+      }
+    });
+
+    return historyLog.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 }

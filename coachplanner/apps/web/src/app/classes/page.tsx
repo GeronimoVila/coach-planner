@@ -348,67 +348,61 @@ export default function ClassesPage() {
           <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-xl font-bold">Calendario</h1>
+          <h1 className="text-xl font-bold md:block hidden">Calendario</h1>
+          <h1 className="text-lg font-bold md:hidden block">Clases</h1>
         </div>
         
-        <div className="flex items-center gap-2">
-          {isDesktop ? (
+        <div className="flex items-center gap-1 sm:gap-2">
+          {isDesktop && (
               <>
-               <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border mr-2">
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border mr-2">
                   <span className="text-xs font-medium text-gray-500">Duración:</span>
                   <Input 
                     type="number" 
-                    min="15" 
-                    max="360"
-                    className="w-14 h-7 text-center px-1 text-sm bg-white border-gray-200 focus-visible:ring-1"
+                    className="w-14 h-7 text-center px-1 text-sm bg-white"
                     value={intervalMinutes}
                     onChange={(e) => handleConfigChange('slotDurationMinutes', Number(e.target.value))}
                   />
-                  <span className="text-xs text-gray-400">min</span>
-               </div>
-
-               <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border mr-2">
-                  <span className="text-xs font-medium text-gray-500">Cancelación (hs):</span>
-                  <Input 
-                    type="number" 
-                    min="0" 
-                    max="72"
-                    className="w-12 h-7 text-center px-1 text-sm bg-white border-gray-200 focus-visible:ring-1"
-                    value={cancellationWindow}
-                    onChange={(e) => handleConfigChange('cancellationWindow', Number(e.target.value))}
-                  />
-               </div>
-
-               <Button 
-                 variant="outline" 
-                 size="sm" 
-                 className="mr-2 gap-2 border-dashed border-gray-400 text-gray-600 hover:border-primary hover:text-primary"
-                 onClick={handleCloneWeek}
-                 title="Copiar estas clases a la semana siguiente"
-               >
-                 <Copy className="h-4 w-4" />
-                 <span className="hidden lg:inline">Clonar Semana</span>
-                 <span className="lg:hidden">Clonar</span>
-               </Button>
-               
-               <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border mr-2">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevWeek}>
-                      <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="font-medium text-sm capitalize px-2 min-w-35 text-center">
-                      {weekStart.getDate()} - {addDays(weekStart, 6).getDate()} {weekStart.toLocaleDateString('es-ES', { month: 'short' })}
-                  </span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextWeek}>
-                      <ChevronRight className="h-4 w-4" />
-                  </Button>
               </div>
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mr-2 gap-2 border-dashed border-gray-400 text-gray-600"
+                onClick={handleCloneWeek}
+              >
+                <Copy className="h-4 w-4" />
+                <span>Clonar Semana</span>
+              </Button>
               </>
-          ) : (
-              null
           )}
+
+          {!isDesktop && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9 w-9 p-0 border-dashed border-gray-400 text-gray-600"
+              onClick={handleCloneWeek}
+              title="Clonar semana"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          )}
+
+          <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-lg border">
+              <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={handlePrevWeek}>
+                  <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="font-bold text-[10px] sm:text-sm uppercase px-1 min-w-17.5 sm:min-w-30 text-center">
+                  {weekStart.getDate()} - {addDays(weekStart, 6).getDate()} {weekStart.toLocaleDateString('es-ES', { month: 'short' })}
+              </span>
+              <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={handleNextWeek}>
+                  <ChevronRight className="h-4 w-4" />
+              </Button>
+          </div>
           
-          <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold ml-2">
-            {user?.fullName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+          <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold ml-1 sm:ml-2 shrink-0">
+            {user?.fullName?.[0]?.toUpperCase() || 'U'}
           </div>
         </div>
       </header>
@@ -518,58 +512,63 @@ export default function ClassesPage() {
         </div>
 
 
-        <div className="md:hidden space-y-4 pb-20">
+        <div className="md:hidden space-y-3 pb-24">
           {timeSlots.map((minutes) => {
-             const activeClass = getClassInSlot(selectedDate, minutes);
-             if (!activeClass) return null;
+            const activeClass = getClassInSlot(selectedDate, minutes);
+            const categoryStyle = activeClass 
+              ? getCategoryStyles(activeClass.category.id, activeClass.isCancelled) 
+              : '';
 
-             const categoryStyle = getCategoryStyles(activeClass.category.id, activeClass.isCancelled);
-
-             return (
-               <div key={minutes} className="flex gap-4">
-                 <div className="w-12 text-right text-xs font-medium text-gray-500 pt-2">
-                   {minutesToTime(minutes)}
-                 </div>
-                 
-                 <div className="flex-1">
+            return (
+              <div key={minutes} className="flex gap-3 group">
+                <div className="w-12 text-right text-[11px] font-bold text-gray-400 pt-1 tabular-nums">
+                  {minutesToTime(minutes)}
+                </div>
+                <div className="flex-1">
+                  {activeClass ? (
                     <div 
-                        className={`rounded-xl p-4 shadow-sm flex flex-col gap-2 relative cursor-pointer ${categoryStyle.replace('border-l-4', 'border-l-[6px]')}`}
-                        onClick={(e) => handleViewClass(e, activeClass.id)}
+                      className={`rounded-xl p-4 shadow-sm flex flex-col gap-2 relative cursor-pointer active:scale-[0.98] transition-all ${categoryStyle.replace('border-l-4', 'border-l-[6px]')}`}
+                      onClick={(e) => handleViewClass(e, activeClass.id)}
                     >
                       <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-bold text-lg">{activeClass.title}</h3>
-                          <p className="text-sm opacity-80">{activeClass.category.name}</p>
+                        <div className="overflow-hidden">
+                          <h3 className="font-bold text-base truncate">{activeClass.title}</h3>
+                          <p className="text-xs opacity-80 font-medium">{activeClass.category.name}</p>
                         </div>
                         
                         {!activeClass.isCancelled && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 -mt-2 -mr-2 text-inherit opacity-70 hover:bg-white/20 hover:text-red-600"
-                              onClick={(e) => handleCancelClass(e, activeClass.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 -mt-2 -mr-2 text-inherit opacity-50 hover:opacity-100"
+                            onClick={(e) => handleCancelClass(e, activeClass.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
 
-                      <div className="flex justify-between items-center mt-2">
-                        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${activeClass._count?.bookings! >= activeClass.capacity ? 'bg-blue-100 text-blue-700' : 'bg-gray-100/80 text-gray-700'}`}>
-                          {activeClass._count?.bookings! >= activeClass.capacity && <Check className="h-3 w-3" />}
-                          <User className="h-3 w-3" />
-                          {activeClass._count?.bookings || 0} / {activeClass.capacity} {activeClass._count?.bookings! >= activeClass.capacity ? 'Completa' : 'Reservas'}
+                      <div className="flex justify-between items-center mt-1">
+                        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold ${activeClass._count?.bookings! >= activeClass.capacity ? 'bg-blue-100 text-blue-700' : 'bg-black/5 text-gray-700'}`}>
+                          <Users className="h-3 w-3" />
+                          {activeClass._count?.bookings || 0} / {activeClass.capacity}
                         </div>
-                        
-                        <div className="flex -space-x-2 relative z-0">
-                           <div className="h-7 w-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[9px]">U1</div>
-                           <div className="h-7 w-7 rounded-full bg-gray-300 border-2 border-white flex items-center justify-center text-[9px] z-10">I</div>
+                        <div className="text-[10px] font-bold opacity-60 italic">
+                          {formatDuration(intervalMinutes)}
                         </div>
                       </div>
                     </div>
-                 </div>
-               </div>
-             )
+                  ) : (
+                    <button 
+                      onClick={() => handleSlotClick(selectedDate, minutes)}
+                      className="w-full h-14 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center bg-gray-50/50 hover:bg-gray-100 hover:border-gray-300 active:bg-gray-200 transition-all group/slot"
+                    >
+                      <Plus className="h-5 w-5 text-gray-300 group-hover/slot:text-primary group-hover/slot:scale-110 transition-all" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
           })}
         </div>
 

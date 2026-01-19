@@ -185,6 +185,9 @@ export class ClassesService {
       const sourceEnd = new Date(sourceStart);
       sourceEnd.setDate(sourceEnd.getDate() + 7);
 
+      const targetEnd = new Date(targetStart);
+      targetEnd.setDate(targetEnd.getDate() + 7);
+
       const sourceClasses = await tx.classSession.findMany({
         where: {
           organizationId: orgId,
@@ -200,13 +203,35 @@ export class ClassesService {
         return { count: 0, message: 'No hay clases para clonar en la semana seleccionada.' };
       }
 
-      const timeDiff = targetStart.getTime() - sourceStart.getTime();
+      const existingTargetClasses = await tx.classSession.findMany({
+        where: {
+          organizationId: orgId,
+          startTime: {
+            gte: targetStart,
+            lt: targetEnd,
+          },
+          isCancelled: false,
+        },
+      });
 
-      const newClassesData = sourceClasses.map((cls) => {
+      const timeDiff = targetStart.getTime() - sourceStart.getTime();
+      const classesToCreate: any[] = [];
+      let skippedCount = 0;
+
+      for (const cls of sourceClasses) {
         const newStartTime = new Date(cls.startTime.getTime() + timeDiff);
         const newEndTime = new Date(cls.endTime.getTime() + timeDiff);
 
-        return {
+        const isOccupied = existingTargetClasses.some((existing) => {
+          return newStartTime < existing.endTime && newEndTime > existing.startTime;
+        });
+
+        if (isOccupied) {
+          skippedCount++;
+          continue;
+        }
+
+        classesToCreate.push({
           organizationId: orgId,
           title: cls.title,
           description: cls.description,
@@ -216,16 +241,26 @@ export class ClassesService {
           categoryId: cls.categoryId,
           instructorId: cls.instructorId,
           isCancelled: false,
-        };
-      });
+        });
+      }
 
-      const result = await tx.classSession.createMany({
-        data: newClassesData,
-      });
+      let createdCount = 0;
+      if (classesToCreate.length > 0) {
+        const result = await tx.classSession.createMany({
+          data: classesToCreate,
+        });
+        createdCount = result.count;
+      }
+
+      let message = `Se clonaron ${createdCount} clases exitosamente.`;
+      if (skippedCount > 0) {
+        message += ` Se omitieron ${skippedCount} clases por coincidir con horarios ya ocupados.`;
+      }
 
       return { 
-        count: result.count, 
-        message: `Se clonaron ${result.count} clases exitosamente a la semana del ${targetStart.toLocaleDateString()}.` 
+        count: createdCount, 
+        skipped: skippedCount,
+        message: message
       };
     });
   }

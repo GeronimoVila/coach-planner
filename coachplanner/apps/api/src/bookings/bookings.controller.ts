@@ -27,6 +27,12 @@ export class BookingsController {
     return this.bookingsService.findMyBookings(userId, orgId);
   }
 
+  @Get('history')
+  @Roles(Role.STUDENT)
+  getHistory(@Request() req) {
+    return this.bookingsService.getStudentHistory(req.user.userId, req.user.orgId);
+  }
+
   @Delete(':classId')
   @Roles(Role.STUDENT)
   cancel(@Request() req, @Param('classId') classId: string) {

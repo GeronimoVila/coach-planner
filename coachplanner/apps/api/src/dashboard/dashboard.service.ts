@@ -88,15 +88,18 @@ export class DashboardService {
              expiresAt: { gt: new Date() },
              remainingAmount: { gt: 0 }
            },
-           orderBy: { expiresAt: 'asc' },
-           take: 1
+           orderBy: { expiresAt: 'asc' }
         }
       }
     });
 
-    const credits = membership?.credits || 0;
+    const realCredits = membership?.creditPackages 
+      ? membership.creditPackages.reduce((sum, pkg) => sum + pkg.remainingAmount, 0)
+      : 0;
 
-    const nextExpiration = membership?.creditPackages[0]?.expiresAt || null;
+    const nextExpiration = membership?.creditPackages && membership.creditPackages.length > 0
+      ? membership.creditPackages[0].expiresAt
+      : null;
 
     const nextClassBooking = await this.db.booking.findFirst({
       where: {
@@ -133,7 +136,7 @@ export class DashboardService {
     return {
       role: 'STUDENT',
       cards: {
-        credits,
+        credits: realCredits,
         nextExpiration,
         nextClass: nextClassData,
         classesThisMonth
