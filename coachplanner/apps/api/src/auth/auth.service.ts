@@ -185,11 +185,17 @@ export class AuthService {
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) throw new UnauthorizedException('Credenciales inválidas');
-
+   
     let primaryRole: Role = Role.STUDENT; 
     let orgId: string | null = null; 
 
-    if (user.organizationsOwned.length > 0) {
+    if (user.role === Role.ADMIN) {
+        primaryRole = Role.ADMIN;
+        if (user.organizationsOwned.length > 0) {
+            orgId = user.organizationsOwned[0].id;
+        }
+    } 
+    else if (user.organizationsOwned.length > 0) {
       primaryRole = Role.OWNER;
       orgId = user.organizationsOwned[0].id;
     } else if (user.memberships.length > 0) {

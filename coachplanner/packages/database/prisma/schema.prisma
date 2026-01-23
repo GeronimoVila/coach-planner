@@ -31,6 +31,7 @@ model User {
   email         String    @unique
   fullName      String?   @map("full_name")
   passwordHash  String?   @map("password_hash")
+  role  Role  @default(STUDENT)
   createdAt     DateTime  @default(now()) @map("created_at")
 
   // Relaciones
