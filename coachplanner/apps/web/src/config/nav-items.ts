@@ -6,6 +6,7 @@ import {
   Tags,
   CreditCard 
 } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 
 export const ownerNavItems = [
   { title: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -20,4 +21,11 @@ export const studentNavItems = [
   { title: 'Hacer Reserva', href: '/book', icon: CalendarDays },
   { title: 'Créditos', href: '/credits', icon: CreditCard },
   { title: 'Mi Perfil', href: '/profile', icon: Settings },
+];
+
+export const adminNavItems = [
+  { title: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { title: 'Gimnasios', href: '/admin/organizations', icon: Building2 },
+  { title: 'Usuarios', href: '/admin/users', icon: Users },
+  { title: 'Configuración', href: '/admin/settings', icon: Settings },
 ];

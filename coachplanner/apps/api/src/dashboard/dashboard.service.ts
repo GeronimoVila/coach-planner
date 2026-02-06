@@ -13,6 +13,10 @@ export class DashboardService {
       const org = await this.db.organization.findFirst({
         where: { ownerId: userId }
       });
+      if (role === 'ADMIN' && !org) {
+         return { empty: true, message: 'Bienvenido al Panel de Administración Global' };
+      }
+
       if (!org) return { empty: true, message: 'No tienes gimnasios registrados' };
       orgId = org.id;
 
@@ -27,6 +31,18 @@ export class DashboardService {
 
       return this.getStudentStats(userId, orgId);
     }
+  }
+
+  async getAdminStats() {
+    const [organizationsCount, usersCount] = await Promise.all([
+      this.db.organization.count(),
+      this.db.user.count(),
+    ]);
+
+    return {
+      organizationsCount,
+      usersCount,
+    };
   }
 
   private async getOwnerStats(orgId: string) {

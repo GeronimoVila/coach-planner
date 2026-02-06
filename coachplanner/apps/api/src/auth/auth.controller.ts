@@ -52,4 +52,16 @@ export class AuthController {
   getAdminData() {
     return { message: 'Hola Jefe, aquí tienes los datos secretos 💰' };
   }
+
+  @Post('impersonate')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(Role.ADMIN)
+  async impersonate(@Body('userId') userId: string) {
+    return this.authService.impersonateUser(userId);
+  }
+
+  @Get('global-announcement') 
+  getGlobalAnnouncement() {
+    return this.authService.getPublicAnnouncement();
+  }
 }

@@ -55,6 +55,7 @@ model Organization {
   cancellationWindow  Int      @default(2)  @map("cancellation_window")
   openHour            Int      @default(7)  @map("open_hour")
   closeHour           Int      @default(22) @map("close_hour")
+  isActive            Boolean  @default(true) @map("is_active")
   createdAt           DateTime @default(now()) @map("created_at")
 
   // Relaciones
@@ -162,4 +163,14 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id])
 
   @@map("notifications")
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  message   String
+  isActive  Boolean  @default(false) @map("is_active")
+  type      String   @default("INFO") // INFO, WARNING, ERROR
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("announcements")
 }

@@ -198,6 +198,10 @@ export class AuthService {
     else if (user.organizationsOwned.length > 0) {
       primaryRole = Role.OWNER;
       orgId = user.organizationsOwned[0].id;
+      const ownedOrg = user.organizationsOwned[0];
+      if (ownedOrg && !ownedOrg.isActive) {
+        throw new UnauthorizedException('Tu gimnasio ha sido suspendido. Contacta a soporte.');
+      }
     } else if (user.memberships.length > 0) {
       primaryRole = user.memberships[0].role;
       orgId = user.memberships[0].organizationId;
@@ -239,5 +243,60 @@ export class AuthService {
     }
 
     return organization;
+  }
+
+  async impersonateUser(targetUserId: string) {
+    const user = await this.db.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        memberships: true,
+        organizationsOwned: true
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    let primaryRole: Role = Role.STUDENT;
+    let orgId: string | null = null;
+
+    if (user.role === Role.ADMIN) {
+        primaryRole = Role.ADMIN;
+        if (user.organizationsOwned.length > 0) orgId = user.organizationsOwned[0].id;
+    } 
+    else if (user.organizationsOwned.length > 0) {
+        primaryRole = Role.OWNER;
+        orgId = user.organizationsOwned[0].id;
+    } 
+    else if (user.memberships.length > 0) {
+        primaryRole = user.memberships[0].role;
+        orgId = user.memberships[0].organizationId;
+    }
+
+    const payload = { 
+      sub: user.id, 
+      email: user.email, 
+      role: primaryRole,
+      orgId: orgId 
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        email: user.email,
+        role: primaryRole,
+        fullName: user.fullName,
+        organizationId: orgId
+      }
+    };
+  }
+
+  async getPublicAnnouncement() {
+    return this.db.announcement.findFirst({
+      where: { isActive: true },
+      select: { message: true, type: true }
+    });
   }
 }

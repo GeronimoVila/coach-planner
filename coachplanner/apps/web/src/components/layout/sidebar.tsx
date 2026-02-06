@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { ownerNavItems, studentNavItems } from '@/config/nav-items';
+import { ownerNavItems, studentNavItems, adminNavItems } from '@/config/nav-items';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { 
@@ -12,7 +12,6 @@ import {
   Dumbbell, 
   Menu, 
   X,
-  UserCircle
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -22,8 +21,13 @@ export default function Sidebar() {
 
   if (!user) return null;
 
-  const isOwner = user.role === 'OWNER' || user.role === 'ADMIN';
-  const navItems = isOwner ? ownerNavItems : studentNavItems;
+  let navItems = studentNavItems;
+
+  if (user.role === 'ADMIN') {
+    navItems = adminNavItems;
+  } else if (user.role === 'OWNER' || user.role === 'INSTRUCTOR') {
+    navItems = ownerNavItems;
+  }
 
   const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
 
@@ -43,7 +47,6 @@ export default function Sidebar() {
           onClick={() => setIsMobileOpen(false)}
         />
       )}
-
       <aside className={cn(
         "fixed top-0 left-0 z-40 h-screen w-64 bg-white border-r transition-transform duration-300 ease-in-out md:translate-x-0 pt-16 md:pt-0",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
@@ -60,7 +63,7 @@ export default function Sidebar() {
 
           <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
             <div className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              Menú Principal
+              {user.role === 'ADMIN' ? 'Administración' : 'Menú Principal'}
             </div>
             {navItems.map((item) => {
               const isActive = pathname === item.href;
@@ -85,6 +88,7 @@ export default function Sidebar() {
               );
             })}
           </nav>
+
           <div className="border-t p-4">
              <div className="flex items-center gap-3 mb-4 px-2">
                 <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">

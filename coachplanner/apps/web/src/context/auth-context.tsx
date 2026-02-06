@@ -61,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(newUser));
 
     setCookie('token', newToken, 7);
+    setCookie('role', newUser.role, 7);
   };
 
   const logout = () => {
@@ -71,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('user');
     
     deleteCookie('token');
+    deleteCookie('role');
     
     router.push('/login');
   };
