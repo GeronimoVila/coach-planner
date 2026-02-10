@@ -10,7 +10,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: 'SECRET_KEY_TEMPORAL',
+      secretOrKey: process.env.JWT_SECRET || 'SECRET_KEY_TEMPORAL',
     });
   }
 
@@ -26,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (user.role === Role.ADMIN) {
         return { 
-            userId: payload.sub, 
+            id: payload.sub,     // <--- CAMBIADO: de 'userId' a 'id'
             email: payload.email, 
             role: payload.role,
             orgId: payload.orgId 
@@ -56,7 +56,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
     }
     return { 
-      userId: payload.sub, 
+      id: payload.sub,      // <--- CAMBIADO: de 'userId' a 'id'
       email: payload.email, 
       role: payload.role,
       orgId: payload.orgId 

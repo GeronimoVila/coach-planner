@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { DatabaseModule } from 'src/database/database.module';
 import { JwtStrategy } from './jwt.strategy';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { GoogleStrategy } from './google.strategy';
 
 @Module({
   imports: [
@@ -13,12 +14,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: 'SECRET_KEY_TEMPORAL',
+      secret: process.env.JWT_SECRET || 'SECRET_KEY_TEMPORAL',
       signOptions: { expiresIn: '7d' },
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [PassportModule, JwtModule],
+  providers: [AuthService, JwtStrategy, GoogleStrategy],
+  exports: [AuthService, PassportModule, JwtModule],
 })
 export class AuthModule {}

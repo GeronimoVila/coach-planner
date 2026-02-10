@@ -10,11 +10,13 @@ export class UsersController {
 
   @Get('me')
   getMe(@Request() req) {
-    return this.usersService.findMe(req.user.userId);
+    const userId = req.user.id || req.user.userId;
+    return this.usersService.findMe(userId);
   }
 
   @Patch('me')
   updateMe(@Request() req, @Body() dto: UpdateUserDto) {
-    return this.usersService.updateMe(req.user.userId, dto);
+    const userId = req.user.id || req.user.userId;
+    return this.usersService.updateMe(userId, dto);
   }
 }

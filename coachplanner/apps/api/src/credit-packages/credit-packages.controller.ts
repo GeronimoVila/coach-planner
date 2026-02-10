@@ -14,22 +14,22 @@ export class CreditPackagesController {
   @Post()
   @Roles(Role.OWNER, Role.ADMIN)
   create(@Request() req, @Body() createCreditPackageDto: CreateCreditPackageDto) {
-    const orgId = req.user.orgId;
+    const orgId = req.user.orgId || req.user.organizationId;
     return this.creditPackagesService.create(createCreditPackageDto, orgId);
   }
 
   @Get('student/:studentId')
   @Roles(Role.OWNER, Role.ADMIN)
   getHistoryAdmin(@Request() req, @Param('studentId') studentId: string) {
-    const orgId = req.user.orgId;
+    const orgId = req.user.orgId || req.user.organizationId;
     return this.creditPackagesService.findAllByStudent(studentId, orgId);
   }
 
   @Get('me')
   @Roles(Role.STUDENT)
   getMyHistory(@Request() req) {
-    const orgId = req.user.orgId;
-    const myUserId = req.user.userId || req.user.sub;
+    const orgId = req.user.orgId || req.user.organizationId;
+    const myUserId = req.user.id || req.user.userId || req.user.sub;
     return this.creditPackagesService.findAllByStudent(myUserId, orgId);
   }
 }

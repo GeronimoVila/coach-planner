@@ -1,4 +1,5 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Request, Param } from '@nestjs/common';
+import type { Response } from 'express'; 
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Request, Param, Res } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { RegisterOwnerDto } from './dto/create-auth.dto';
@@ -11,6 +12,39 @@ import { Role } from '@repo/database';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  async googleAuth(@Request() req) {
+    // Inicia el flujo
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleAuthRedirect(@Request() req, @Res() res: Response) {
+    console.log("🔵 [Backend] Google Callback recibido");
+    
+    // 1. Validamos usuario
+    const result = await this.authService.validateOAuthUser(req.user);
+    
+    console.log("🟢 [Backend] Usuario validado:", req.user.email);
+    console.log("🔑 [Backend] Token generado (primeros 10 chars):", result.access_token?.substring(0, 10));
+
+    // 2. Definimos URL del frontend
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    console.log("👉 [Backend] Redirigiendo a:", `${frontendUrl}/auth/callback`);
+
+    // 3. Redirección
+    return res.redirect(`${frontendUrl}/auth/callback?token=${result.access_token}&status=success`);
+  }
+
+  // --- NUEVO ENDPOINT PARA UNIRSE AL GYM ---
+  @UseGuards(AuthGuard('jwt'))
+  @Post('join')
+  async joinGym(@Request() req, @Body('slug') slug: string) {
+    // req.user.id viene del token JWT
+    return this.authService.joinGym(req.user.id, slug);
+  }
 
   @Post('register')
   register(@Body() dto: RegisterOwnerDto) {
@@ -36,7 +70,6 @@ export class AuthController {
     return this.authService.getGymInfo(slug);
   }
 
-  // --- RUTA PROTEGIDA ---
   @UseGuards(AuthGuard('jwt'))
   @Get('profile')
   getProfile(@Request() req) {

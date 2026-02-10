@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config'; // <--- 1. IMPORTAR ESTO
 import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -17,7 +18,23 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), DatabaseModule, AuthModule, CategoriesModule, ClassesModule, OrganizationsModule, StudentsModule, CreditPackagesModule, BookingsModule, UsersModule, JobsModule, DashboardModule, NotificationsModule, AdminModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }), 
+    ScheduleModule.forRoot(), 
+    DatabaseModule, 
+    AuthModule, 
+    CategoriesModule, 
+    ClassesModule, 
+    OrganizationsModule, 
+    StudentsModule, 
+    CreditPackagesModule, 
+    BookingsModule, 
+    UsersModule, 
+    JobsModule, 
+    DashboardModule, 
+    NotificationsModule, 
+    AdminModule
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -13,22 +13,23 @@ export class StudentsController {
   @Get('me')
   @Roles(Role.STUDENT)
   getMe(@Request() req) {
-    const orgId = req.user.orgId;
-    const userId = req.user.userId;
+    const userId = req.user.id || req.user.userId;
+    const orgId = req.user.orgId || req.user.organizationId;
+    
     return this.studentsService.findMe(userId, orgId);
   }
 
   @Post()
   @Roles(Role.OWNER, Role.ADMIN, Role.INSTRUCTOR)
   create(@Request() req, @Body() body: { email: string; fullName: string }) {
-    const orgId = req.user.organizationId || req.user.orgId;
+    const orgId = req.user.orgId || req.user.organizationId;
     return this.studentsService.create(body, orgId);
   }
 
   @Get()
   @Roles(Role.OWNER, Role.ADMIN, Role.INSTRUCTOR)
   findAll(@Request() req) {
-    const orgId = req.user.organizationId || req.user.orgId;
+    const orgId = req.user.orgId || req.user.organizationId;
     return this.studentsService.findAll(orgId);
   }
 
@@ -39,7 +40,7 @@ export class StudentsController {
     @Param('id') studentId: string, 
     @Body() body: { categoryId?: number }
   ) {
-    const orgId = req.user.orgId;
+    const orgId = req.user.orgId || req.user.organizationId;
     return this.studentsService.update(studentId, orgId, body);
   }
 }

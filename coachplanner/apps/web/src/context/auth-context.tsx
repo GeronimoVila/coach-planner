@@ -1,14 +1,27 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { jwtDecode } from 'jwt-decode'; // <--- USAMOS LA LIBRERÍA
 
-interface User {
+// Definimos la estructura exacta que viene dentro de tu token JWT
+interface JwtPayload {
+  sub: string;
+  email: string;
+  role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
+  orgId?: string;
+  fullName?: string;
+  avatarUrl?: string;
+  exp?: number;
+}
+
+export interface User {
   id: string;
   email: string;
   role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
   organizationId: string | null;
   fullName?: string;
+  avatarUrl?: string;
 }
 
 interface AuthContextType {
@@ -16,6 +29,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (token: string, user: User) => void;
+  loginWithToken: (token: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -37,6 +51,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  const login = useCallback((newToken: string, newUser: User) => {
+    console.log("💾 AuthContext: Guardando sesión...", newUser);
+    setToken(newToken);
+    setUser(newUser);
+    
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(newUser));
+
+    setCookie('token', newToken, 7);
+    setCookie('role', newUser.role, 7);
+  }, []);
+
+  const logout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('auth_intent');
+    deleteCookie('token');
+    deleteCookie('role');
+    router.push('/login');
+  }, [router]);
+
+  // --- NUEVA VERSIÓN ROBUSTA ---
+  const loginWithToken = useCallback((newToken: string) => {
+    try {
+      console.log("🔍 AuthContext: Decodificando token...");
+      
+      // Usamos la librería para decodificar
+      const decoded = jwtDecode<JwtPayload>(newToken);
+      
+      console.log("✅ AuthContext: Token válido. Datos:", decoded);
+
+      const userData: User = {
+        id: decoded.sub, 
+        email: decoded.email,
+        role: decoded.role || 'STUDENT',
+        organizationId: decoded.orgId || null,
+        fullName: decoded.fullName || '',
+        avatarUrl: decoded.avatarUrl || ''
+      };
+
+      login(newToken, userData);
+      
+    } catch (error) {
+      console.error("❌ AuthContext: Error crítico al leer el token:", error);
+    }
+  }, [login]);
+
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
@@ -46,40 +109,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
       } catch (error) {
-        console.error("Error leyendo sesión:", error);
-        logout();
+        console.error("Error recuperando sesión:", error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
       }
     }
     setIsLoading(false);
   }, []);
 
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken);
-    setUser(newUser);
-    
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(newUser));
-
-    setCookie('token', newToken, 7);
-    setCookie('role', newUser.role, 7);
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    
-    deleteCookie('token');
-    deleteCookie('role');
-    
-    router.push('/login');
-  };
-
   return (
     <AuthContext.Provider 
-      value={{ user, token, isLoading, login, logout, isAuthenticated: !!user }}
+      value={{ user, token, isLoading, login, loginWithToken, logout, isAuthenticated: !!user }}
     >
       {children}
     </AuthContext.Provider>

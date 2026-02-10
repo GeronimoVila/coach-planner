@@ -14,28 +14,32 @@ export class BookingsController {
   @Post()
   @Roles(Role.STUDENT)
   create(@Request() req, @Body() createBookingDto: CreateBookingDto) {
-    const userId = req.user.userId;
-    const orgId = req.user.orgId;
+    const userId = req.user.id || req.user.userId;
+    const orgId = req.user.orgId || req.user.organizationId;
     return this.bookingsService.create(userId, orgId, createBookingDto);
   }
 
   @Get('my-bookings')
   @Roles(Role.STUDENT)
   findMyBookings(@Request() req) {
-    const userId = req.user.userId;
-    const orgId = req.user.orgId;
+    const userId = req.user.id || req.user.userId;
+    const orgId = req.user.orgId || req.user.organizationId;
     return this.bookingsService.findMyBookings(userId, orgId);
   }
 
   @Get('history')
   @Roles(Role.STUDENT)
   getHistory(@Request() req) {
-    return this.bookingsService.getStudentHistory(req.user.userId, req.user.orgId);
+    const userId = req.user.id || req.user.userId;
+    const orgId = req.user.orgId || req.user.organizationId;
+    return this.bookingsService.getStudentHistory(userId, orgId);
   }
 
   @Delete(':classId')
   @Roles(Role.STUDENT)
   cancel(@Request() req, @Param('classId') classId: string) {
-    return this.bookingsService.cancelByStudent(req.user.userId, req.user.orgId, classId);
+    const userId = req.user.id || req.user.userId;
+    const orgId = req.user.orgId || req.user.organizationId;
+    return this.bookingsService.cancelByStudent(userId, orgId, classId);
   }
 }

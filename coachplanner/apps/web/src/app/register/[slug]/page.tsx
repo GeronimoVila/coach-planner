@@ -16,8 +16,9 @@ import {
 } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Loader2, AlertCircle, Tag, Eye, EyeOff } from 'lucide-react';
+import { GoogleButton } from "@/components/auth/google-button";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface Category {
   id: number;
@@ -193,7 +194,7 @@ export default function RegisterStudentPage() {
           </CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             
             <div className="space-y-2">
@@ -302,10 +303,28 @@ export default function RegisterStudentPage() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creando cuenta...
                 </>
               ) : (
-                'Registrarse'
+                'Registrarse con Email'
               )}
             </Button>
           </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                O únete con
+              </span>
+            </div>
+          </div>
+
+          <GoogleButton 
+            mode="JOIN_GYM" 
+            gymSlug={slug} 
+            text="Unirse con Google" 
+          />
+
         </CardContent>
 
         <CardFooter className="justify-center">

@@ -12,8 +12,9 @@ export class DashboardController {
 
   @Get('stats')
   async getStats(@Request() req) {
-    const { userId, role } = req.user;
-    return this.dashboardService.getStats(userId, role);
+    const { id, role, orgId, userId } = req.user;
+    const finalUserId = id || userId;
+    return this.dashboardService.getStats(finalUserId, role, orgId);
   }
 
   @Get('admin-stats')

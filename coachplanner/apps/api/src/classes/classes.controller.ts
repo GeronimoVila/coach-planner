@@ -17,7 +17,7 @@ export class ClassesController {
   create(@Body() createClassDto: CreateClassDto, @Request() req) {
     const orgId = req.user.organizationId || req.user.orgId;
 
-    const instructorId = req.user.id || req.user.sub || req.user.userId;
+    const instructorId = req.user.id || req.user.userId || req.user.sub;
 
     if (!instructorId) {
       console.error('User Object:', req.user);
@@ -32,8 +32,8 @@ export class ClassesController {
     @Query('start') start: string,
     @Query('end') end: string
   ) {
-    const orgId = req.user.orgId;
-    const userId = req.user.userId;
+    const orgId = req.user.orgId || req.user.organizationId;
+    const userId = req.user.id || req.user.userId;
     return this.classesService.getSchedule(orgId, userId, start, end);
   }
 
@@ -59,12 +59,14 @@ export class ClassesController {
   @Patch(':id/cancel')
   @Roles(Role.OWNER, Role.ADMIN, Role.INSTRUCTOR)
   cancelSession(@Request() req, @Param('id') id: string) {
-    return this.classesService.cancelClassSession(id, req.user.orgId);
+    const orgId = req.user.orgId || req.user.organizationId;
+    return this.classesService.cancelClassSession(id, orgId);
   }
 
   @Post('clone-week')
   @Roles(Role.OWNER, Role.ADMIN)
   cloneWeek(@Request() req, @Body() dto: CloneWeekDto) {
-    return this.classesService.cloneWeek(req.user.orgId, dto);
+    const orgId = req.user.orgId || req.user.organizationId;
+    return this.classesService.cloneWeek(orgId, dto);
   }
 }

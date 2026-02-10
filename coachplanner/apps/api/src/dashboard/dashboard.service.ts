@@ -6,28 +6,34 @@ import { BookingStatus, Role } from '@repo/database';
 export class DashboardService {
   constructor(private db: DatabaseService) {}
 
-  async getStats(userId: string, role: string) {
-    let orgId = '';
+  async getStats(userId: string, role: string, orgIdToken?: string) {
+    let orgId = orgIdToken;
 
     if (role === 'OWNER' || role === 'ADMIN' || role === 'INSTRUCTOR') {
-      const org = await this.db.organization.findFirst({
-        where: { ownerId: userId }
-      });
-      if (role === 'ADMIN' && !org) {
-         return { empty: true, message: 'Bienvenido al Panel de Administración Global' };
+      
+      if (!orgId) {
+          const org = await this.db.organization.findFirst({
+            where: { ownerId: userId }
+          });
+          
+          if (role === 'ADMIN' && !org) {
+             return { empty: true, message: 'Bienvenido al Panel de Administración Global' };
+          }
+          if (!org) return { empty: true, message: 'No tienes gimnasios registrados' };
+          
+          orgId = org.id;
       }
-
-      if (!org) return { empty: true, message: 'No tienes gimnasios registrados' };
-      orgId = org.id;
 
       return this.getOwnerStats(orgId);
 
     } else {
-      const membership = await this.db.membership.findFirst({
-        where: { userId: userId }
-      });
-      if (!membership) return { empty: true, message: 'No estás inscripto en ningún gimnasio' };
-      orgId = membership.organizationId;
+      if (!orgId) {
+          const membership = await this.db.membership.findFirst({
+            where: { userId: userId }
+          });
+          if (!membership) return { empty: true, message: 'No estás inscripto en ningún gimnasio' };
+          orgId = membership.organizationId;
+      }
 
       return this.getStudentStats(userId, orgId);
     }
@@ -88,7 +94,7 @@ export class DashboardService {
         activeStudents,
         classesToday,
         expiringPacks,
-        registerSlug: org?.slug || ''
+        registerSlug: org?.slug || '' 
       }
     };
   }

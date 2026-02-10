@@ -8,11 +8,12 @@ export function middleware(request: NextRequest) {
 
   const publicRoutes = [
     '/login', 
-    '/register', 
+    '/register',
     '/register-business',
     '/forgot-password',
     '/privacy', 
-    '/terms'
+    '/terms',
+    '/auth/callback'
   ];
 
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
@@ -22,6 +23,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (token && isPublicRoute) {
+    if (pathname.startsWith('/auth/callback')) {
+        return NextResponse.next();
+    }
+
     if (role === 'ADMIN') {
       return NextResponse.redirect(new URL('/admin', request.url));
     }
