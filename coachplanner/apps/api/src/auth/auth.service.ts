@@ -55,27 +55,22 @@ export class AuthService {
     return this.generateJwt(user);
   }
 
-  // --- NUEVO MÉTODO AGREGADO ---
   async joinGym(userId: string, slug: string) {
-    // 1. Buscar la organización por slug
     const org = await this.db.organization.findFirst({
         where: { slug: { equals: slug, mode: 'insensitive' } },
-        include: { owner: true } // Traemos al dueño para notificarle
+        include: { owner: true } 
     });
 
     if (!org) throw new NotFoundException('Gimnasio no encontrado');
 
-    // 2. Verificar si ya es miembro
     const existing = await this.db.membership.findFirst({
         where: { userId, organizationId: org.id }
     });
 
     if (existing) {
-        // Si ya es miembro, no hacemos nada, solo devolvemos éxito
         return { message: `Ya eres miembro de ${org.name}` };
     }
 
-    // 3. Crear Membresía
     await this.db.membership.create({
         data: {
             userId,
@@ -84,7 +79,6 @@ export class AuthService {
         }
     });
 
-    // 4. Notificar al Alumno
     await this.notifications.create(
         userId,
         '¡Bienvenido! 👋',
@@ -92,7 +86,6 @@ export class AuthService {
         'SUCCESS'
     );
 
-    // 5. Notificar al Dueño (Si existe email y es válido para enviar)
     try {
         const student = await this.db.user.findUnique({ where: { id: userId } });
         const studentName = student?.fullName || 'Un nuevo alumno';
@@ -141,7 +134,6 @@ export class AuthService {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(dto.password, salt);
     
-    // Explicitamos que es un string
     const verificationToken: string = uuidv4();
 
     try {
@@ -180,7 +172,6 @@ export class AuthService {
       });
 
       try {
-        // Aquí verificationToken siempre es string, así que es seguro
         await this.emailService.sendVerificationEmail(result.email, verificationToken);
       } catch (emailError) {
         console.error("❌ Error enviando email de verificación:", emailError);
@@ -237,7 +228,7 @@ export class AuthService {
            mode: 'insensitive'
         }
       },
-      include: { owner: true } // Incluimos dueño para notificar
+      include: { owner: true }
     });
 
     if (!organization) {
@@ -251,8 +242,6 @@ export class AuthService {
 
     let userIdToLink = '';
     let isNewUser = false;
-    
-    // CORRECCIÓN: Definimos explícitamente el tipo union
     let verificationToken: string | null = null; 
 
     if (existingUser) {
@@ -277,7 +266,6 @@ export class AuthService {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(dto.password, salt);
       
-      // Asignamos el valor, ahora TypeScript sabe que es un string válido dentro de este bloque
       verificationToken = uuidv4(); 
 
       const newUser = await this.db.user.create({
@@ -305,7 +293,6 @@ export class AuthService {
 
       if (isNewUser) {
           try {
-             // CORRECCIÓN: Validamos que no sea null
              if (verificationToken) {
                 await this.emailService.sendVerificationEmail(dto.email, verificationToken);
              }
@@ -326,7 +313,6 @@ export class AuthService {
         );
       }
 
-      // Notificar al dueño sobre el nuevo alumno
       try {
         if (organization.owner && organization.owner.email) {
             await this.emailService.sendNewStudentAlert(
@@ -454,5 +440,82 @@ export class AuthService {
         organizationId: orgId 
       }
     };
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.db.user.findFirst({ 
+        where: { 
+            email: {
+                equals: email.toLowerCase().trim(),
+                mode: 'insensitive'
+            } 
+        } 
+    });
+
+    if (!user) {
+        console.warn("❌ [AuthService] Usuario no encontrado para el email:", email);
+        return { message: 'Si el correo existe en nuestro sistema, recibirás un enlace para recuperar tu cuenta.' };
+    }
+
+    if (user.provider === 'GOOGLE') {
+        console.warn("⚠️ [AuthService] El usuario se registró con Google. No se puede resetear password manual.");
+        return { message: 'Tu cuenta está vinculada a Google. Por favor, inicia sesión con Google.' };
+    }
+
+    const token = uuidv4();
+    const expires = new Date();
+    expires.setHours(expires.getHours() + 1); 
+
+    try {
+        await this.db.user.update({
+            where: { id: user.id },
+            data: {
+                resetPasswordToken: token,
+                resetPasswordExpires: expires
+            }
+        });
+    } catch (dbError) {
+        console.error("🔥 [AuthService] Error crítico actualizando el token en la BD:", dbError);
+        throw new InternalServerErrorException("Error al procesar la solicitud en la base de datos.");
+    }
+
+    try {
+        await this.emailService.sendPasswordResetEmail(user.email, token);
+    } catch (mailError) {
+        console.error("🔥 [AuthService] Error al enviar el email:", mailError);
+    }
+
+    return { message: 'Si el correo existe en nuestro sistema, recibirás un enlace para recuperar tu cuenta.' };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+
+    const user = await this.db.user.findUnique({
+        where: { resetPasswordToken: token }
+    });
+
+    if (!user) {
+        console.error("❌ [AuthService] Token no encontrado en la base de datos.");
+        throw new BadRequestException('El enlace es inválido o ya ha sido utilizado.');
+    }
+
+    if (!user.resetPasswordExpires || new Date() > user.resetPasswordExpires) {
+        console.error("⏰ [AuthService] El token ha expirado. Expiración:", user.resetPasswordExpires);
+        throw new BadRequestException('El enlace ha expirado. Solicita uno nuevo.');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await this.db.user.update({
+        where: { id: user.id },
+        data: {
+            passwordHash: hashedPassword,
+            resetPasswordToken: null,
+            resetPasswordExpires: null
+        }
+    });
+
+    return { message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' };
   }
 }

@@ -37,6 +37,8 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   emailVerified DateTime?
   verificationToken String? @unique
+  resetPasswordToken   String?   @unique
+  resetPasswordExpires DateTime?
 
   // Relaciones
   organizationsOwned Organization[] // Gyms que posee

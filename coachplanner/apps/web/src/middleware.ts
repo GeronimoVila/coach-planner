@@ -14,7 +14,8 @@ export function middleware(request: NextRequest) {
     '/privacy', 
     '/terms',
     '/auth/callback',
-    '/auth/verify'
+    '/auth/verify',
+    '/auth/reset-password'
   ];
 
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));

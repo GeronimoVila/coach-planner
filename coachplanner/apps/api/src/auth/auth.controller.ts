@@ -16,24 +16,14 @@ export class AuthController {
   @Get('google')
   @UseGuards(AuthGuard('google'))
   async googleAuth(@Request() req) {
-    // Inicia el flujo
   }
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Request() req, @Res() res: Response) {
-    console.log("🔵 [Backend] Google Callback recibido");
-    
-    // 1. Validamos usuario
     const result = await this.authService.validateOAuthUser(req.user);
-    
-    console.log("🟢 [Backend] Usuario validado:", req.user.email);
-
-    // 2. Definimos URL del frontend
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    console.log("👉 [Backend] Redirigiendo a:", `${frontendUrl}/auth/callback`);
 
-    // 3. Redirección
     return res.redirect(`${frontendUrl}/auth/callback?token=${result.access_token}&status=success`);
   }
 
@@ -101,5 +91,22 @@ export class AuthController {
   @Get('global-announcement') 
   getGlobalAnnouncement() {
     return this.authService.getPublicAnnouncement();
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body('email') email: string) {
+    if (!email) throw new BadRequestException('El email es obligatorio');
+    return this.authService.forgotPassword(email);
+  }
+
+  @Post('reset-password')
+  async resetPassword(
+    @Body('token') token: string, 
+    @Body('password') password: string
+  ) {
+    if (!token || !password) throw new BadRequestException('Faltan datos');
+    if (password.length < 6) throw new BadRequestException('La contraseña debe tener al menos 6 caracteres');
+    
+    return this.authService.resetPassword(token, password);
   }
 }

@@ -95,4 +95,31 @@ export class EmailService {
       console.error('Error enviando alerta de nuevo alumno:', error);
     }
   }
+
+  async sendPasswordResetEmail(email: string, token: string) {
+    const resetLink = `${process.env.FRONTEND_URL}/auth/reset-password?token=${token}`;
+
+    try {
+      await this.resend.emails.send({
+        from: 'onboarding@resend.dev',
+        to: email,
+        subject: '🔐 Recupera tu contraseña',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>¿Olvidaste tu contraseña?</h2>
+            <p>No te preocupes, es algo que nos pasa a todos. Haz clic en el siguiente botón para crear una nueva:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetLink}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                Restablecer Contraseña
+              </a>
+            </div>
+            <p style="color: #666; font-size: 12px;">Este enlace expirará en 1 hora. Si no solicitaste este cambio, ignora este correo.</p>
+          </div>
+        `
+      });
+      console.log(`📧 Email de recuperación enviado a ${email}`);
+    } catch (error) {
+      console.error('Error enviando email de recuperación:', error);
+    }
+  }
 }
