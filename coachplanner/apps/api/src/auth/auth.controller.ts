@@ -1,5 +1,5 @@
 import type { Response } from 'express'; 
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Request, Param, Res } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Request, Param, Res, Query, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { RegisterOwnerDto } from './dto/create-auth.dto';
@@ -28,7 +28,6 @@ export class AuthController {
     const result = await this.authService.validateOAuthUser(req.user);
     
     console.log("🟢 [Backend] Usuario validado:", req.user.email);
-    console.log("🔑 [Backend] Token generado (primeros 10 chars):", result.access_token?.substring(0, 10));
 
     // 2. Definimos URL del frontend
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -38,11 +37,17 @@ export class AuthController {
     return res.redirect(`${frontendUrl}/auth/callback?token=${result.access_token}&status=success`);
   }
 
-  // --- NUEVO ENDPOINT PARA UNIRSE AL GYM ---
+  @Get('verify')
+  async verifyEmail(@Query('token') token: string) {
+    if (!token) {
+        throw new BadRequestException('Falta el token de verificación');
+    }
+    return this.authService.verifyEmail(token);
+  }
+
   @UseGuards(AuthGuard('jwt'))
   @Post('join')
   async joinGym(@Request() req, @Body('slug') slug: string) {
-    // req.user.id viene del token JWT
     return this.authService.joinGym(req.user.id, slug);
   }
 

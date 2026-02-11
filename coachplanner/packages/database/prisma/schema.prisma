@@ -35,6 +35,8 @@ model User {
   provider      String    @default("EMAIL")
   role  Role  @default(STUDENT)
   createdAt     DateTime  @default(now()) @map("created_at")
+  emailVerified DateTime?
+  verificationToken String? @unique
 
   // Relaciones
   organizationsOwned Organization[] // Gyms que posee

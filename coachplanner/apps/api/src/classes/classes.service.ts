@@ -4,12 +4,14 @@ import { DatabaseService } from 'src/database/database.service';
 import { BookingStatus } from '@repo/database';
 import { CloneWeekDto } from './dto/clone-week.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class ClassesService {
   constructor(
     private readonly db: DatabaseService,
-    private readonly notifications: NotificationsService 
+    private readonly notifications: NotificationsService,
+    private readonly emailService: EmailService
   ) {}
 
   async create(createClassDto: CreateClassDto, orgId: string, instructorId: string) {
@@ -123,11 +125,17 @@ export class ClassesService {
       };
     });
   }
+
   async cancelClassSession(id: string, orgId: string) {
     const transactionResult = await this.db.$transaction(async (tx) => {
       const session = await tx.classSession.findUnique({
         where: { id, organizationId: orgId },
-        include: { bookings: { where: { status: BookingStatus.CONFIRMED } } } 
+        include: { 
+            bookings: { 
+                where: { status: BookingStatus.CONFIRMED },
+                include: { user: true }
+            } 
+        } 
       });
 
       if (!session) throw new NotFoundException('Clase no encontrada');
@@ -162,13 +170,28 @@ export class ClassesService {
     });
 
     if (transactionResult.session.bookings.length > 0) {
-      const promises = transactionResult.session.bookings.map(booking => {
-        return this.notifications.create(
+      const formattedDate = transactionResult.session.startTime.toLocaleDateString();
+      const className = transactionResult.session.title;
+
+      const promises = transactionResult.session.bookings.map(async (booking) => {
+        await this.notifications.create(
           booking.userId,
           'Clase Cancelada',
-          `El profesor ha cancelado la clase de "${transactionResult.session.title}" del ${transactionResult.session.startTime.toLocaleDateString()}. Se te ha reembolsado el crédito.`,
+          `El profesor ha cancelado la clase de "${className}" del ${formattedDate}. Se te ha reembolsado el crédito.`,
           'WARNING'
         );
+
+        try {
+            if (booking.user.email) {
+                await this.emailService.sendClassCancellation(
+                    booking.user.email,
+                    className,
+                    formattedDate
+                );
+            }
+        } catch (emailError) {
+            console.error(`Error enviando email de cancelación a ${booking.userId}:`, emailError);
+        }
       });
       
       await Promise.all(promises);
@@ -193,7 +216,7 @@ export class ClassesService {
           organizationId: orgId,
           startTime: {
             gte: sourceStart,
-            lt: sourceEnd,
+            lte: sourceEnd,
           },
           isCancelled: false,
         },
@@ -208,7 +231,7 @@ export class ClassesService {
           organizationId: orgId,
           startTime: {
             gte: targetStart,
-            lt: targetEnd,
+            lte: targetEnd,
           },
           isCancelled: false,
         },

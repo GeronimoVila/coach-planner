@@ -16,6 +16,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -33,7 +34,8 @@ import { AdminModule } from './admin/admin.module';
     JobsModule, 
     DashboardModule, 
     NotificationsModule, 
-    AdminModule
+    AdminModule,
+    EmailModule
   ],
   controllers: [AppController],
   providers: [AppService],

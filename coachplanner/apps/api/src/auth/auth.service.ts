@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from 'src/database/database.service';
@@ -7,13 +7,16 @@ import { RegisterStudentDto } from './dto/register-student.dto';
 import { LoginDto } from './dto/login.dto';
 import { Role } from '@repo/database';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../email/email.service';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly db: DatabaseService,
     private readonly jwtService: JwtService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly emailService: EmailService
   ) {}
 
   async validateOAuthUser(profile: any) {
@@ -32,6 +35,7 @@ export class AuthService {
           fullName: `${profile.firstName} ${profile.lastName}`,
           avatarUrl: profile.picture,
           provider: 'GOOGLE',
+          emailVerified: new Date(),
         },
         include: { memberships: true, organizationsOwned: true }
       });
@@ -39,7 +43,10 @@ export class AuthService {
       if (user.provider === 'GOOGLE' || !user.avatarUrl) {
          user = await this.db.user.update({
              where: { id: user.id },
-             data: { avatarUrl: profile.picture },
+             data: { 
+                 avatarUrl: profile.picture,
+                 emailVerified: user.emailVerified || new Date()
+             },
              include: { memberships: true, organizationsOwned: true }
          });
       }
@@ -52,7 +59,8 @@ export class AuthService {
   async joinGym(userId: string, slug: string) {
     // 1. Buscar la organización por slug
     const org = await this.db.organization.findFirst({
-        where: { slug: { equals: slug, mode: 'insensitive' } }
+        where: { slug: { equals: slug, mode: 'insensitive' } },
+        include: { owner: true } // Traemos al dueño para notificarle
     });
 
     if (!org) throw new NotFoundException('Gimnasio no encontrado');
@@ -76,7 +84,7 @@ export class AuthService {
         }
     });
 
-    // 4. Notificar
+    // 4. Notificar al Alumno
     await this.notifications.create(
         userId,
         '¡Bienvenido! 👋',
@@ -84,12 +92,46 @@ export class AuthService {
         'SUCCESS'
     );
 
+    // 5. Notificar al Dueño (Si existe email y es válido para enviar)
+    try {
+        const student = await this.db.user.findUnique({ where: { id: userId } });
+        const studentName = student?.fullName || 'Un nuevo alumno';
+        
+        if (org.owner && org.owner.email) {
+             await this.emailService.sendNewStudentAlert(
+                org.owner.email, 
+                studentName, 
+                org.name
+            );
+        }
+    } catch (e) {
+        console.error("Error enviando alerta al dueño:", e);
+    }
+
     return { message: `Te has unido a ${org.name}` };
   }
-  // ----------------------------
+  
+  async verifyEmail(token: string) {
+    const user = await this.db.user.findUnique({
+      where: { verificationToken: token }
+    });
+
+    if (!user) {
+        throw new NotFoundException('Token de verificación inválido o expirado.');
+    }
+
+    await this.db.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: new Date(),
+        verificationToken: null
+      }
+    });
+
+    return { message: 'Correo verificado exitosamente', valid: true };
+  }
 
   async register(dto: RegisterOwnerDto) {
-    // ... (El código existente sigue igual)
     const existing = await this.db.user.findUnique({
       where: { email: dto.email },
     });
@@ -98,6 +140,9 @@ export class AuthService {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(dto.password, salt);
+    
+    // Explicitamos que es un string
+    const verificationToken: string = uuidv4();
 
     try {
       const result = await this.db.$transaction(async (tx) => {
@@ -106,6 +151,8 @@ export class AuthService {
             email: dto.email,
             fullName: dto.fullName,
             passwordHash: hashedPassword,
+            verificationToken: verificationToken,
+            emailVerified: null,
           },
         });
 
@@ -127,22 +174,30 @@ export class AuthService {
             message: 'Usuario registrado correctamente', 
             userId: user.id,
             slug: org.slug,
-            user: user
+            user: user,
+            email: user.email
         };
       });
+
+      try {
+        // Aquí verificationToken siempre es string, así que es seguro
+        await this.emailService.sendVerificationEmail(result.email, verificationToken);
+      } catch (emailError) {
+        console.error("❌ Error enviando email de verificación:", emailError);
+      }
       try {
         await this.notifications.create(
           result.userId,
           '¡Bienvenido a la Plataforma! 👋',
-          'Gracias por registrar tu negocio. Aquí podrás gestionar tus clases, alumnos y créditos.',
+          'Gracias por registrarte. Por favor verifica tu correo electrónico.',
           'INFO'
         );
       } catch (notifError) {
         console.error('Error enviando notificación de bienvenida:', notifError);
       }
 
-      const { user, ...response } = result;
-      return response;
+      const { user, email, ...response } = result;
+      return { ...response, message: 'Registro exitoso. Revisa tu correo para verificar tu cuenta.' };
 
     } catch (error) {
       console.error(error);
@@ -175,7 +230,6 @@ export class AuthService {
   }
 
   async registerStudent(slug: string, dto: RegisterStudentDto) {
-    // ... (El código existente sigue igual)
     const organization = await this.db.organization.findFirst({
       where: { 
         slug: {
@@ -183,6 +237,7 @@ export class AuthService {
            mode: 'insensitive'
         }
       },
+      include: { owner: true } // Incluimos dueño para notificar
     });
 
     if (!organization) {
@@ -196,6 +251,9 @@ export class AuthService {
 
     let userIdToLink = '';
     let isNewUser = false;
+    
+    // CORRECCIÓN: Definimos explícitamente el tipo union
+    let verificationToken: string | null = null; 
 
     if (existingUser) {
       if (!existingUser.passwordHash) {
@@ -205,6 +263,11 @@ export class AuthService {
       if (!isMatch) {
         throw new ConflictException('El usuario ya existe. Ingresa tu contraseña actual para unirte a este gimnasio.');
       }
+
+      if (!existingUser.emailVerified) {
+          throw new UnauthorizedException('Debes verificar tu correo antes de unirte.');
+      }
+
       const isAlreadyMember = existingUser.memberships.some(m => m.organizationId === organization.id);
       if (isAlreadyMember) {
         throw new ConflictException('Ya eres miembro de este gimnasio. Inicia sesión.');
@@ -213,11 +276,17 @@ export class AuthService {
     } else {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(dto.password, salt);
+      
+      // Asignamos el valor, ahora TypeScript sabe que es un string válido dentro de este bloque
+      verificationToken = uuidv4(); 
+
       const newUser = await this.db.user.create({
         data: {
           email: dto.email,
           fullName: dto.name, 
           passwordHash: hashedPassword,
+          verificationToken: verificationToken,
+          emailVerified: null
         },
       });
       userIdToLink = newUser.id;
@@ -235,12 +304,19 @@ export class AuthService {
       });
 
       if (isNewUser) {
-        await this.notifications.create(
+          try {
+             // CORRECCIÓN: Validamos que no sea null
+             if (verificationToken) {
+                await this.emailService.sendVerificationEmail(dto.email, verificationToken);
+             }
+          } catch (e) { console.error(e); }
+
+          await this.notifications.create(
             userIdToLink,
             '¡Bienvenido! 👋',
-            `Gracias por registrarte. Te has unido exitosamente a ${organization.name}.`,
+            `Gracias por registrarte. Verifica tu correo para continuar.`,
             'INFO'
-        );
+          );
       } else {
         await this.notifications.create(
             userIdToLink,
@@ -250,10 +326,21 @@ export class AuthService {
         );
       }
 
+      // Notificar al dueño sobre el nuevo alumno
+      try {
+        if (organization.owner && organization.owner.email) {
+            await this.emailService.sendNewStudentAlert(
+                organization.owner.email, 
+                dto.name, 
+                organization.name
+            );
+        }
+      } catch (e) { console.error(e); }
+
       return { 
         message: existingUser 
           ? `¡Cuenta vinculada! Bienvenido a ${organization.name}` 
-          : `Registro exitoso. Bienvenido a ${organization.name}`,
+          : `Registro exitoso. Revisa tu correo para verificar tu cuenta.`,
         userId: userIdToLink 
       };
 
@@ -275,6 +362,9 @@ export class AuthService {
     
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Credenciales inválidas');
+    }
+    if (!user.emailVerified) {
+        throw new UnauthorizedException('Debes verificar tu correo electrónico antes de ingresar. Revisa tu bandeja de entrada.');
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);

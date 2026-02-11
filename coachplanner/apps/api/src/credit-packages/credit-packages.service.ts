@@ -2,12 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DatabaseService } from 'src/database/database.service';
 import { CreateCreditPackageDto } from './dto/create-credit-package.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class CreditPackagesService {
   constructor(
     private readonly db: DatabaseService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly emailService: EmailService
   ) {}
 
   async create(dto: CreateCreditPackageDto, orgId: string) {
@@ -18,6 +20,7 @@ export class CreditPackagesService {
           organizationId: orgId,
         },
       },
+      include: { user: true }
     });
 
     if (!membership) {
@@ -27,7 +30,7 @@ export class CreditPackagesService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + dto.daysValid);
 
-    const newPackage = await this.db.$transaction(async (tx) => {
+    const result = await this.db.$transaction(async (tx) => {
       const creditPackage = await tx.creditPackage.create({
         data: {
           membershipId: membership.id,
@@ -38,14 +41,14 @@ export class CreditPackagesService {
         },
       });
 
-      await tx.membership.update({
+      const updatedMembership = await tx.membership.update({
         where: { id: membership.id },
         data: {
           credits: { increment: dto.amount },
         },
       });
 
-      return creditPackage;
+      return { creditPackage, updatedMembership };
     });
     try {
         await this.notifications.create(
@@ -54,11 +57,20 @@ export class CreditPackagesService {
           `Se han acreditado ${dto.amount} clases del pack "${dto.name}". Vencen el ${expiresAt.toLocaleDateString()}.`,
           'SUCCESS'
         );
+        if (membership.user && membership.user.email) {
+            console.log(`📤 Enviando correo de saldo a ${membership.user.email}`);
+            await this.emailService.sendBalanceAdded(
+                membership.user.email,
+                dto.amount,
+                result.updatedMembership.credits
+            );
+        }
+
     } catch (error) {
-        console.error('Error enviando notificación de paquete:', error);
+        console.error('Error enviando notificación/email de paquete:', error);
     }
 
-    return newPackage;
+    return result.creditPackage;
   }
 
   async findAllByStudent(studentId: string, orgId: string) {
