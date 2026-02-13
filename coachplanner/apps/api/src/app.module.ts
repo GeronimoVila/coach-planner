@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config'; // <--- 1. IMPORTAR ESTO
+import { APP_FILTER } from '@nestjs/core'; // <--- Necesario para el filtro global
+import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { SentryModule, SentryGlobalFilter } from '@sentry/nestjs/setup'; // <--- Importación v10 oficial
+
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
@@ -20,6 +23,8 @@ import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
+    // 1. Sentry debe ser de los primeros en cargar
+    SentryModule.forRoot(), 
     ConfigModule.forRoot({ isGlobal: true }), 
     ScheduleModule.forRoot(), 
     DatabaseModule, 
@@ -38,6 +43,13 @@ import { EmailModule } from './email/email.module';
     EmailModule
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // 2. Registramos el filtro global para que Sentry "escuche" toda la app
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
+    },
+  ],
 })
 export class AppModule {}

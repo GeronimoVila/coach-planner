@@ -1,4 +1,6 @@
-import axios, { AxiosInstance } from 'axios';
+import axios from 'axios';
+import * as Sentry from "@sentry/nextjs";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -23,8 +25,10 @@ axiosInstance.interceptors.request.use((config) => {
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      
+    const statusCode = error.response?.status;
+    const errorMessage = error.response?.data?.message || 'Ocurrió un error inesperado';
+
+    if (statusCode === 401 || statusCode === 403) {
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         console.warn('⛔ Sesión invalidada. Redirigiendo al login...');
         
@@ -35,7 +39,18 @@ axiosInstance.interceptors.response.use(
         document.cookie = 'role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
 
         window.location.href = '/login?reason=session_expired';
+        return Promise.reject(error);
       }
+    }
+
+    if (!statusCode || statusCode >= 500) {
+      Sentry.captureException(error);
+    }
+
+    if (statusCode !== 401) {
+      toast.error('Error del sistema', {
+        description: Array.isArray(errorMessage) ? errorMessage[0] : errorMessage,
+      });
     }
     
     return Promise.reject(error);
