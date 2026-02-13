@@ -133,11 +133,19 @@ export default function RegisterStudentPage() {
         throw new Error(data.message || 'Ocurrió un error al registrarse');
       }
 
-      toast.success(`¡Bienvenido a ${gymName}!`, {
-        description: 'Tu cuenta ha sido creada exitosamente. Inicia sesión para continuar.',
-      });
+      if (data.message && (data.message.includes('verificar') || data.message.includes('correo'))) {
+        toast.success('¡Registro casi listo! 📧', {
+          description: 'Hemos enviado un enlace a tu correo. Por favor verifícalo antes de iniciar sesión.',
+          duration: 8000,
+        });
+        router.push('/login?verified=pending');
+      } else {
+        toast.success(`¡Bienvenido a ${gymName}! 🎉`, {
+          description: 'Tu cuenta ha sido vinculada exitosamente. Ya puedes reservar.',
+        });
+        router.push('/login');
+      }
       
-      router.push('/login'); 
     } catch (error: any) {
       toast.error('Error de Registro', {
         description: error.message,

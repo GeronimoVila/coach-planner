@@ -2,14 +2,14 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { jwtDecode } from 'jwt-decode'; // <--- USAMOS LA LIBRERÍA
+import { jwtDecode } from 'jwt-decode';
 
-// Definimos la estructura exacta que viene dentro de tu token JWT
 interface JwtPayload {
   sub: string;
   email: string;
   role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
   orgId?: string;
+  categoryId?: number;
   fullName?: string;
   avatarUrl?: string;
   exp?: number;
@@ -20,6 +20,7 @@ export interface User {
   email: string;
   role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
   organizationId: string | null;
+  categoryId?: number | null;
   fullName?: string;
   avatarUrl?: string;
 }
@@ -74,12 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login');
   }, [router]);
 
-  // --- NUEVA VERSIÓN ROBUSTA ---
   const loginWithToken = useCallback((newToken: string) => {
     try {
       console.log("🔍 AuthContext: Decodificando token...");
       
-      // Usamos la librería para decodificar
       const decoded = jwtDecode<JwtPayload>(newToken);
       
       console.log("✅ AuthContext: Token válido. Datos:", decoded);
@@ -89,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: decoded.email,
         role: decoded.role || 'STUDENT',
         organizationId: decoded.orgId || null,
+        categoryId: decoded.categoryId ?? null,
         fullName: decoded.fullName || '',
         avatarUrl: decoded.avatarUrl || ''
       };

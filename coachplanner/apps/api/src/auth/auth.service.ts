@@ -401,6 +401,7 @@ export class AuthService {
   private generateJwt(user: any) {
     let primaryRole: Role = Role.STUDENT; 
     let orgId: string | null = null; 
+    let categoryId: number | null = null;
 
     if (user.role === Role.ADMIN) {
         primaryRole = Role.ADMIN;
@@ -418,6 +419,7 @@ export class AuthService {
     } else if (user.memberships.length > 0) {
       primaryRole = user.memberships[0].role;
       orgId = user.memberships[0].organizationId;
+      categoryId = user.memberships[0].categoryId;
     }
 
     const payload = { 
@@ -425,6 +427,7 @@ export class AuthService {
       email: user.email, 
       role: primaryRole,
       orgId: orgId,
+      categoryId: categoryId,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl
     };
@@ -437,7 +440,8 @@ export class AuthService {
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
         role: primaryRole,
-        organizationId: orgId 
+        organizationId: orgId,
+        categoryId: categoryId
       }
     };
   }
@@ -518,4 +522,18 @@ export class AuthService {
 
     return { message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' };
   }
+
+  async refreshToken(userId: string) {
+  const user = await this.db.user.findUnique({
+    where: { id: userId },
+    include: {
+      memberships: true,
+      organizationsOwned: true
+    }
+  });
+
+  if (!user) throw new UnauthorizedException('Usuario no encontrado');
+
+  return this.generateJwt(user);
+}
 }

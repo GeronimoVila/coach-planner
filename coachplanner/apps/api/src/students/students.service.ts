@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import * as bcrypt from 'bcrypt';
 import { Role } from '@repo/database';
@@ -137,5 +137,32 @@ export class StudentsService {
       categoryId: membership.categoryId,
       category: membership.category,
     };
+  }
+
+  async updateCategory(userId: string, orgId: string, categoryId: number) {
+    const category = await this.db.category.findFirst({
+      where: { id: categoryId, organizationId: orgId }
+    });
+
+    if (!category) {
+      throw new NotFoundException('La categoría seleccionada no existe o no pertenece a este gimnasio.');
+    }
+
+    const membership = await this.db.membership.findFirst({
+      where: { 
+        userId: userId, 
+        organizationId: orgId 
+      }
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('No eres miembro de este gimnasio.');
+    }
+
+    // 3. Actualizamos
+    return this.db.membership.update({
+      where: { id: membership.id },
+      data: { categoryId }
+    });
   }
 }

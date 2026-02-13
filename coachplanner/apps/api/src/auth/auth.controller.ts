@@ -109,4 +109,10 @@ export class AuthController {
     
     return this.authService.resetPassword(token, password);
   }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('refresh')
+  async refreshSession(@Request() req) {
+    return this.authService.refreshToken(req.user.id);
+  }
 }

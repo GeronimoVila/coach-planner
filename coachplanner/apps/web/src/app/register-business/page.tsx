@@ -90,11 +90,12 @@ export default function RegisterBusinessPage() {
         throw new Error(data.message || 'Error al registrar el negocio');
       }
 
-      toast.success('¡Gimnasio creado!', {
-        description: 'Tu cuenta de administrador está lista. Inicia sesión.',
+      toast.success('¡Registro casi listo! 📧', {
+        description: 'Hemos enviado un enlace a tu correo. Por favor verifícalo antes de iniciar sesión.',
+        duration: 8000,
       });
 
-      router.push('/login');
+      router.push('/login?verified=pending');
 
     } catch (error: any) {
       toast.error('Error de registro', {

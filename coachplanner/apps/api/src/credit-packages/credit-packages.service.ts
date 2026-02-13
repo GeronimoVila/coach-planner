@@ -58,7 +58,6 @@ export class CreditPackagesService {
           'SUCCESS'
         );
         if (membership.user && membership.user.email) {
-            console.log(`📤 Enviando correo de saldo a ${membership.user.email}`);
             await this.emailService.sendBalanceAdded(
                 membership.user.email,
                 dto.amount,
