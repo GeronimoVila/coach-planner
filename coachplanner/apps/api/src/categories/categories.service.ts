@@ -2,12 +2,18 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { DatabaseService } from 'src/database/database.service';
+import { PlansService } from '../plans/plans.service';
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly plansService: PlansService
+  ) {}
 
   async create(createCategoryDto: CreateCategoryDto, orgId: string) {
+    await this.plansService.validateCreateCategory(orgId);
+
     return this.db.category.create({
       data: {
         name: createCategoryDto.name,

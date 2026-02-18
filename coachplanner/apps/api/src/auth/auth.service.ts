@@ -5,10 +5,11 @@ import { DatabaseService } from 'src/database/database.service';
 import { RegisterOwnerDto } from './dto/create-auth.dto';
 import { RegisterStudentDto } from './dto/register-student.dto'; 
 import { LoginDto } from './dto/login.dto';
-import { Role } from '@repo/database';
+import { Role, PlanType } from '@repo/database';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
 import { v4 as uuidv4 } from 'uuid';
+import { PlansService } from '../plans/plans.service';
 
 @Injectable()
 export class AuthService {
@@ -16,7 +17,8 @@ export class AuthService {
     private readonly db: DatabaseService,
     private readonly jwtService: JwtService,
     private readonly notifications: NotificationsService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly plansService: PlansService
   ) {}
 
   async validateOAuthUser(profile: any) {
@@ -62,6 +64,8 @@ export class AuthService {
     });
 
     if (!org) throw new NotFoundException('Gimnasio no encontrado');
+
+    await this.plansService.validateAddStudent(org.id);
 
     const existing = await this.db.membership.findFirst({
         where: { userId, organizationId: org.id }
@@ -164,7 +168,7 @@ export class AuthService {
 
         return { 
             message: 'Usuario registrado correctamente', 
-            userId: user.id,
+            userId: user.id, 
             slug: org.slug,
             user: user,
             email: user.email
@@ -207,6 +211,7 @@ export class AuthService {
       select: { 
         name: true, 
         id: true,
+        plan: true,
         categories: {
           select: { id: true, name: true },
         }
@@ -217,7 +222,23 @@ export class AuthService {
       throw new NotFoundException('El gimnasio no existe.');
     }
 
-    return organization;
+    let isFull = false;
+    if (organization.plan === PlanType.FREE) {
+        const limits = await this.db.planLimits.findUnique({ where: { plan: PlanType.FREE } });
+        if (limits) {
+            const currentStudents = await this.db.membership.count({
+                where: { organizationId: organization.id, role: Role.STUDENT }
+            });
+            if (currentStudents >= limits.maxStudents) {
+                isFull = true;
+            }
+        }
+    }
+
+    return {
+        ...organization,
+        isFull
+    };
   }
 
   async registerStudent(slug: string, dto: RegisterStudentDto) {
@@ -235,105 +256,92 @@ export class AuthService {
       throw new NotFoundException('El gimnasio no existe o el enlace es incorrecto.');
     }
 
-    const existingUser = await this.db.user.findUnique({
-      where: { email: dto.email },
-      include: { memberships: true }
+    await this.plansService.validateAddStudent(organization.id);
+
+    return this.db.$transaction(async (tx) => {
+        const existingUser = await tx.user.findUnique({
+            where: { email: dto.email },
+            include: { memberships: true }
+        });
+
+        let userIdToLink = '';
+        let isNewUser = false;
+        let verificationToken: string | null = null; 
+
+        if (existingUser) {
+            if (!existingUser.passwordHash) {
+                throw new ConflictException('El usuario ya existe pero no tiene contraseña configurada. Contacta soporte o entra con Google.');
+            }
+            const isMatch = await bcrypt.compare(dto.password, existingUser.passwordHash);
+            if (!isMatch) {
+                throw new ConflictException('El usuario ya existe. Ingresa tu contraseña actual para unirte a este gimnasio.');
+            }
+            if (!existingUser.emailVerified) {
+                throw new UnauthorizedException('Debes verificar tu correo antes de unirte.');
+            }
+            const isAlreadyMember = existingUser.memberships.some(m => m.organizationId === organization.id);
+            if (isAlreadyMember) {
+                throw new ConflictException('Ya eres miembro de este gimnasio. Inicia sesión.');
+            }
+            userIdToLink = existingUser.id;
+        } else {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(dto.password, salt);
+            
+            verificationToken = uuidv4(); 
+
+            const newUser = await tx.user.create({
+                data: {
+                    email: dto.email,
+                    fullName: dto.name, 
+                    passwordHash: hashedPassword,
+                    verificationToken: verificationToken,
+                    emailVerified: null
+                },
+            });
+            userIdToLink = newUser.id;
+            isNewUser = true;
+        }
+
+        await tx.membership.create({
+            data: {
+                userId: userIdToLink,
+                organizationId: organization.id,
+                role: Role.STUDENT,
+                categoryId: dto.categoryId, 
+            }
+        });
+
+        this.sendPostRegisterActions(isNewUser, dto, userIdToLink, verificationToken, organization);
+
+        return { 
+            message: existingUser 
+                ? `¡Cuenta vinculada! Bienvenido a ${organization.name}` 
+                : `Registro exitoso. Revisa tu correo para verificar tu cuenta.`,
+            userId: userIdToLink 
+        };
     });
+  }
 
-    let userIdToLink = '';
-    let isNewUser = false;
-    let verificationToken: string | null = null; 
-
-    if (existingUser) {
-      if (!existingUser.passwordHash) {
-        throw new ConflictException('El usuario ya existe pero no tiene contraseña configurada. Contacta soporte o entra con Google.');
-      }
-      const isMatch = await bcrypt.compare(dto.password, existingUser.passwordHash);
-      if (!isMatch) {
-        throw new ConflictException('El usuario ya existe. Ingresa tu contraseña actual para unirte a este gimnasio.');
-      }
-
-      if (!existingUser.emailVerified) {
-          throw new UnauthorizedException('Debes verificar tu correo antes de unirte.');
-      }
-
-      const isAlreadyMember = existingUser.memberships.some(m => m.organizationId === organization.id);
-      if (isAlreadyMember) {
-        throw new ConflictException('Ya eres miembro de este gimnasio. Inicia sesión.');
-      }
-      userIdToLink = existingUser.id;
-    } else {
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(dto.password, salt);
-      
-      verificationToken = uuidv4(); 
-
-      const newUser = await this.db.user.create({
-        data: {
-          email: dto.email,
-          fullName: dto.name, 
-          passwordHash: hashedPassword,
-          verificationToken: verificationToken,
-          emailVerified: null
-        },
-      });
-      userIdToLink = newUser.id;
-      isNewUser = true;
-    }
-
-    try {
-      await this.db.membership.create({
-        data: {
-          userId: userIdToLink,
-          organizationId: organization.id,
-          role: Role.STUDENT,
-          categoryId: dto.categoryId, 
-        }
-      });
-
-      if (isNewUser) {
-          try {
-             if (verificationToken) {
-                await this.emailService.sendVerificationEmail(dto.email, verificationToken);
-             }
-          } catch (e) { console.error(e); }
-
-          await this.notifications.create(
-            userIdToLink,
-            '¡Bienvenido! 👋',
-            `Gracias por registrarte. Verifica tu correo para continuar.`,
-            'INFO'
-          );
-      } else {
-        await this.notifications.create(
-            userIdToLink,
-            'Nueva Organización Agregado 🏋️',
-            `Te has unido exitosamente a ${organization.name}.`,
-            'SUCCESS'
-        );
-      }
-
+  private async sendPostRegisterActions(isNewUser: boolean, dto: any, userId: string, token: string | null, org: any) {
       try {
-        if (organization.owner && organization.owner.email) {
-            await this.emailService.sendNewStudentAlert(
-                organization.owner.email, 
-                dto.name, 
-                organization.name
-            );
-        }
-      } catch (e) { console.error(e); }
-
-      return { 
-        message: existingUser 
-          ? `¡Cuenta vinculada! Bienvenido a ${organization.name}` 
-          : `Registro exitoso. Revisa tu correo para verificar tu cuenta.`,
-        userId: userIdToLink 
-      };
-
-    } catch (error) {
-      console.error('Error creando membresía:', error);
-      throw new InternalServerErrorException('Error al unirse al gimnasio.');
-    }
+          if (isNewUser) {
+              if (token) await this.emailService.sendVerificationEmail(dto.email, token);
+              await this.notifications.create(
+                  userId, '¡Bienvenido! 👋', `Gracias por registrarte. Verifica tu correo para continuar.`, 'INFO'
+              );
+          } else {
+              await this.notifications.create(
+                  userId, 'Nueva Organización Agregado 🏋️', `Te has unido exitosamente a ${org.name}.`, 'SUCCESS'
+              );
+          }
+          
+          if (org.owner && org.owner.email) {
+              await this.emailService.sendNewStudentAlert(org.owner.email, dto.name, org.name);
+          }
+      } catch (e) {
+          console.error("Error en acciones post-registro:", e);
+      }
   }
 
   async login(loginDto: LoginDto) {
@@ -524,16 +532,16 @@ export class AuthService {
   }
 
   async refreshToken(userId: string) {
-  const user = await this.db.user.findUnique({
-    where: { id: userId },
-    include: {
-      memberships: true,
-      organizationsOwned: true
-    }
-  });
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      include: {
+        memberships: true,
+        organizationsOwned: true
+      }
+    });
 
-  if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user) throw new UnauthorizedException('Usuario no encontrado');
 
-  return this.generateJwt(user);
-}
+    return this.generateJwt(user);
+  }
 }

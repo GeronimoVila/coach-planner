@@ -12,17 +12,19 @@ import {
   Dumbbell, 
   Menu, 
   X,
+  Crown
 } from 'lucide-react';
+import { useUpgradeModal } from '@/context/upgrade-context';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
+  const { openUpgradeModal } = useUpgradeModal();
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   if (!user) return null;
 
   let navItems = studentNavItems;
-
   if (user.role === 'ADMIN') {
     navItems = adminNavItems;
   } else if (user.role === 'OWNER' || user.role === 'INSTRUCTOR') {
@@ -42,10 +44,7 @@ export default function Sidebar() {
         </Button>
       </div>
       {isMobileOpen && (
-        <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-30"
-          onClick={() => setIsMobileOpen(false)}
-        />
+        <div className="md:hidden fixed inset-0 bg-black/50 z-30" onClick={() => setIsMobileOpen(false)} />
       )}
       <aside className={cn(
         "fixed top-0 left-0 z-40 h-screen w-64 bg-white border-r transition-transform duration-300 ease-in-out md:translate-x-0 pt-16 md:pt-0",
@@ -68,7 +67,6 @@ export default function Sidebar() {
             {navItems.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
-              
               return (
                 <Link 
                   key={item.href} 
@@ -90,6 +88,17 @@ export default function Sidebar() {
           </nav>
 
           <div className="border-t p-4">
+             {(user.role === 'OWNER') && (
+                 <div className="mb-4">
+                    <Button 
+                        onClick={openUpgradeModal}
+                        className="w-full bg-linear-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-md border-0"
+                    >
+                        <Crown className="mr-2 h-4 w-4" />
+                        Pasar a PRO
+                    </Button>
+                 </div>
+             )}
              <div className="flex items-center gap-3 mb-4 px-2">
                 <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
                    {user.fullName?.[0] || user.email[0].toUpperCase()}

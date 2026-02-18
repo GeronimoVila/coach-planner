@@ -15,10 +15,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, AlertCircle, Tag, Eye, EyeOff } from 'lucide-react';
+import { Loader2, AlertCircle, Tag, Eye, EyeOff, Lock } from 'lucide-react';
 import { GoogleButton } from "@/components/auth/google-button";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/$/, '');
 
 interface Category {
   id: number;
@@ -34,6 +34,7 @@ export default function RegisterStudentPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCheckingGym, setIsCheckingGym] = useState(true);
   const [gymError, setGymError] = useState(false);
+  const [isGymFull, setIsGymFull] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -55,6 +56,10 @@ export default function RegisterStudentPage() {
         const data = await res.json();
         setGymName(data.name);
         
+        if (data.isFull) {
+            setIsGymFull(true);
+        }
+        
         if (data.categories && Array.isArray(data.categories)) {
             setCategories(data.categories);
         }
@@ -72,6 +77,11 @@ export default function RegisterStudentPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isGymFull) {
+        toast.error('Este gimnasio ya no acepta más alumnos.');
+        return;
+    }
     
     if (
       !formData.name.trim() || 
@@ -114,6 +124,7 @@ export default function RegisterStudentPage() {
     }
 
     setIsSubmitting(true);
+    toast.dismiss();
 
     try {
       const res = await fetch(`${API_URL}/auth/register/${slug}`, {
@@ -147,7 +158,7 @@ export default function RegisterStudentPage() {
       }
       
     } catch (error: any) {
-      toast.error('Error de Registro', {
+      toast.error('No se pudo completar el registro', {
         description: error.message,
       });
     } finally {
@@ -180,6 +191,37 @@ export default function RegisterStudentPage() {
             <Button variant="outline" onClick={() => router.push('/login')}>
               Volver al Inicio
             </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isGymFull) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50/50 px-4">
+        <Card className="w-full max-w-md border-orange-300 shadow-xl">
+          <CardHeader className="text-center bg-orange-50/50 pb-6 rounded-t-xl">
+            <div className="mx-auto bg-orange-100 p-4 rounded-full w-fit mb-3">
+              <Lock className="h-8 w-8 text-orange-600" />
+            </div>
+            <CardTitle className="text-2xl text-orange-800">Cupos Completos</CardTitle>
+            <CardDescription className="text-orange-700 font-medium text-base mt-2">
+              El gimnasio <span className="font-bold">{gymName}</span> ha alcanzado el límite de alumnos de su plan actual.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6 text-center text-muted-foreground">
+            <p>
+              No es posible registrar nuevos alumnos en este momento. 
+              Por favor, contacta al administrador del gimnasio para más información.
+            </p>
+          </CardContent>
+          <CardFooter className="justify-center bg-gray-50/80 py-4 rounded-b-xl">
+             <Link href="/login">
+                <Button variant="outline" className="border-orange-200 text-orange-700 hover:bg-orange-50">
+                    Volver al Login
+                </Button>
+             </Link>
           </CardFooter>
         </Card>
       </div>

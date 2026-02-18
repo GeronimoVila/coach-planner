@@ -21,6 +21,7 @@ interface Organization {
   id: string;
   name: string;
   slug: string;
+  plan: 'FREE' | 'PRO' | string;
   owner: {
     id: string;
     name: string;
@@ -67,6 +68,25 @@ export default function AdminOrganizationsPage() {
     }
   };
 
+  const handleChangePlan = async (orgId: string, newPlan: string, orgName: string) => {
+    if (!confirm(`¿Seguro que quieres cambiar el plan de "${orgName}" a ${newPlan}?`)) {
+        setOrgs([...orgs]); 
+        return;
+    }
+
+    try {
+      setOrgs(orgs.map(org => 
+        org.id === orgId ? { ...org, plan: newPlan } : org
+      ));
+
+      await api.patch(`/admin/organizations/${orgId}/plan`, { plan: newPlan });
+      toast.success(`Plan de ${orgName} actualizado a ${newPlan}`);
+    } catch (error) {
+      toast.error('Error al cambiar el plan');
+      fetchOrgs();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-96 w-full items-center justify-center">
@@ -92,6 +112,7 @@ export default function AdminOrganizationsPage() {
               <thead className="bg-gray-50 text-xs uppercase text-gray-700">
                 <tr>
                   <th className="px-6 py-3">Estado</th>
+                  <th className="px-6 py-3">Plan</th>
                   <th className="px-6 py-3">Nombre</th>
                   <th className="px-6 py-3">Dueño</th>
                   <th className="px-6 py-3 text-center">Alumnos</th>
@@ -109,6 +130,22 @@ export default function AdminOrganizationsPage() {
                         <Badge variant="destructive">Suspendido</Badge>
                       )}
                     </td>
+                    
+                    <td className="px-6 py-4">
+                        <select 
+                            value={org.plan}
+                            onChange={(e) => handleChangePlan(org.id, e.target.value, org.name)}
+                            className={`text-xs font-semibold rounded-full px-2 py-1 outline-none cursor-pointer border ${
+                                org.plan === 'PRO' 
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                                  : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                            }`}
+                        >
+                            <option value="FREE">FREE</option>
+                            <option value="PRO">PRO</option>
+                        </select>
+                    </td>
+
                     <td className="px-6 py-4 font-medium text-gray-900">
                       {org.name}
                       <div className="text-xs text-gray-400 font-normal">{org.slug}</div>

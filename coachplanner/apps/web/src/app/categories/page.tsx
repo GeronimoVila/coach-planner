@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Loader2, Plus, Trash2, ArrowLeft, Tag } from 'lucide-react';
+import { useUpgradeModal } from '@/context/upgrade-context';
 
 interface Category {
   id: number;
@@ -17,6 +18,7 @@ interface Category {
 
 export default function CategoriesPage() {
   const { user, isLoading: authLoading } = useAuth();
+  const { openUpgradeModal } = useUpgradeModal();
   const router = useRouter();
   
   const [categories, setCategories] = useState<Category[]>([]);
@@ -57,8 +59,14 @@ export default function CategoriesPage() {
       setCategories([...categories, res.data]);
       setNewName('');
       toast.success('Categoría creada');
-    } catch (error) {
-      toast.error('Error al crear categoría');
+    } catch (error: any) {
+      toast.dismiss();
+
+      if (error.response?.data?.message?.toLowerCase().includes('límite')) {
+          openUpgradeModal();
+      } else {
+          toast.error(error.response?.data?.message || 'Error al crear categoría');
+      }
     } finally {
       setCreating(false);
     }

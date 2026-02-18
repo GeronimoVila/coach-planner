@@ -31,20 +31,16 @@ function CallbackContent() {
     
     localStorage.removeItem('auth_intent');
 
-    console.log("🎯 Callback: Intención detectada:", intent);
-
     loginWithToken(token);
     
     toast.success('¡Autenticación exitosa!');
 
     if (intent?.type === 'REGISTER_OWNER') {
-        console.log("🚀 Redirigiendo forzosamente a Onboarding de Negocio");
         router.push('/onboarding/business');
         return; 
     } 
 
     if (intent?.type === 'JOIN_GYM' && intent?.slug) {
-        console.log("🚀 Procesando inscripción al gym:", intent.slug);
         
         api.post('/auth/join', { slug: intent.slug }, {
             headers: { Authorization: `Bearer ${token}` }
@@ -55,11 +51,9 @@ function CallbackContent() {
              });
 
              try {
-                console.log("🔄 Refrescando token para obtener permisos de alumno...");
                 const sessionData = await api.auth.refreshSession(token);
                 
                 if (sessionData && sessionData.access_token && sessionData.user) {
-                    console.log("✅ Token actualizado. OrgID:", sessionData.user.organizationId);
                     login(sessionData.access_token, sessionData.user);
                 }
              } catch (error) {
@@ -79,7 +73,6 @@ function CallbackContent() {
         return;
     } 
 
-    console.log("🚀 Redirigiendo al Dashboard por defecto");
     router.push('/');
 
   }, [searchParams, router, login, loginWithToken]);

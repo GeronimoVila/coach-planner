@@ -53,7 +53,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const login = useCallback((newToken: string, newUser: User) => {
-    console.log("💾 AuthContext: Guardando sesión...", newUser);
     setToken(newToken);
     setUser(newUser);
     
@@ -77,11 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithToken = useCallback((newToken: string) => {
     try {
-      console.log("🔍 AuthContext: Decodificando token...");
       
       const decoded = jwtDecode<JwtPayload>(newToken);
-      
-      console.log("✅ AuthContext: Token válido. Datos:", decoded);
 
       const userData: User = {
         id: decoded.sub, 

@@ -33,6 +33,14 @@ export class AdminController {
     return this.adminService.toggleOrganizationStatus(id);
   }
 
+  @Patch('organizations/:id/plan')
+  updatePlan(
+    @Param('id') id: string,
+    @Body('plan') plan: string
+  ) {
+    return this.adminService.updateOrganizationPlan(id, plan);
+  }
+
   @Patch('users/:id/email')
   async updateUserEmail(
     @Param('id') id: string,

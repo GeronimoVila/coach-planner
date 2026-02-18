@@ -5,16 +5,20 @@ import { BookingStatus } from '@repo/database';
 import { CloneWeekDto } from './dto/clone-week.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
+import { PlansService } from '../plans/plans.service';
 
 @Injectable()
 export class ClassesService {
   constructor(
     private readonly db: DatabaseService,
     private readonly notifications: NotificationsService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly plansService: PlansService
   ) {}
 
   async create(createClassDto: CreateClassDto, orgId: string, instructorId: string) {
+    await this.plansService.validateCreateClass(orgId, 1);
+
     if (createClassDto.startTime >= createClassDto.endTime) {
       throw new BadRequestException('La hora de inicio debe ser anterior a la de fin');
     }
@@ -201,6 +205,9 @@ export class ClassesService {
   }
 
   async cloneWeek(orgId: string, dto: CloneWeekDto) {
+
+    await this.plansService.validateCreateClass(orgId, 1);
+
     return this.db.$transaction(async (tx) => {
       const sourceStart = new Date(dto.sourceWeekStart);
       const targetStart = new Date(dto.targetWeekStart);
@@ -265,6 +272,10 @@ export class ClassesService {
           instructorId: cls.instructorId,
           isCancelled: false,
         });
+      }
+
+      if (classesToCreate.length > 0) {
+         await this.plansService.validateCreateClass(orgId, classesToCreate.length);
       }
 
       let createdCount = 0;

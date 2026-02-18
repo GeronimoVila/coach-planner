@@ -20,7 +20,6 @@ export default function StudentGuard({ children }: { children: React.ReactNode }
       !user.categoryId && 
       pathname !== '/onboarding/category'
     ) {
-      console.log("🚫 Guard: Alumno del gym pero sin categoría. Redirigiendo...");
       router.replace('/onboarding/category');
     } else {
       setIsChecking(false);

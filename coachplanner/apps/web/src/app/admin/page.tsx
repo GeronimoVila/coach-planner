@@ -10,11 +10,13 @@ import {
   ArrowUpRight, 
   Loader2,
   AlertCircle,
-  Megaphone
+  Megaphone,
+  Settings
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input'; 
-import { Button } from '@/components/ui/button'; 
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
 interface DashboardStats {
   gyms: {
@@ -38,20 +40,35 @@ export default function AdminDashboardPage() {
   const [announcementData, setAnnouncementData] = useState({ message: '', isActive: false, type: 'INFO' });
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
 
+  const [limits, setLimits] = useState({ maxStudents: 5, maxClasses: 5, maxCategories: 2 });
+  const [savingLimits, setSavingLimits] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, announceRes] = await Promise.all([
+        toast.dismiss();
+
+        const [statsRes, announceRes, limitsRes] = await Promise.all([
            api.get('/admin/dashboard'),
-           api.get('/admin/announcement')
+           api.get('/admin/announcement'),
+           api.get('/plans/limits')
         ]);
 
         setStats(statsRes.data);
+        
         if (announceRes.data) {
            setAnnouncementData(announceRes.data);
         }
+        
+        if (limitsRes.data) {
+            setLimits({
+                maxStudents: limitsRes.data.maxStudents,
+                maxClasses: limitsRes.data.maxClasses,
+                maxCategories: limitsRes.data.maxCategories
+            });
+        }
       } catch (error) {
-        toast.error('Error cargando datos del dashboard');
+        console.error("Error cargando dashboard admin", error);
       } finally {
         setLoading(false);
       }
@@ -62,11 +79,13 @@ export default function AdminDashboardPage() {
 
   const handleSaveAnnouncement = async () => {
     if (announcementData.isActive && !announcementData.message.trim()) {
-      toast.error('Debes escribir un mensaje para activar el anuncio');
+      toast.warning('Debes escribir un mensaje para activar el anuncio');
       return;
     }
 
     setSavingAnnouncement(true);
+    toast.dismiss();
+
     try {
       await api.post('/admin/announcement', announcementData);
       
@@ -81,6 +100,24 @@ export default function AdminDashboardPage() {
     } finally {
       setSavingAnnouncement(false);
     }
+  };
+
+  const handleSaveLimits = async () => {
+      setSavingLimits(true);
+      toast.dismiss();
+
+      try {
+          await api.patch('/plans/limits', {
+              maxStudents: Number(limits.maxStudents),
+              maxClasses: Number(limits.maxClasses),
+              maxCategories: Number(limits.maxCategories)
+          });
+          toast.success('Límites actualizados correctamente');
+      } catch {
+          toast.error('Error al actualizar límites');
+      } finally {
+          setSavingLimits(false);
+      }
   };
 
   if (loading) {
@@ -159,58 +196,107 @@ export default function AdminDashboardPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Megaphone className="h-5 w-5 text-blue-500" /> Anuncio Global
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">Este mensaje aparecerá en la parte superior de la pantalla para todos los usuarios.</p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-6">
-               <label className="flex items-center gap-2 cursor-pointer select-none">
-                 <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${announcementData.isActive ? 'bg-blue-600 border-blue-600' : 'border-gray-300 bg-white'}`}>
-                    {announcementData.isActive && <ArrowUpRight className="h-3 w-3 text-white rotate-45" />}
-                    <input 
-                      type="checkbox" 
-                      className="hidden"
-                      checked={announcementData.isActive} 
-                      onChange={(e) => setAnnouncementData({...announcementData, isActive: e.target.checked})}
-                    />
-                 </div>
-                 <span className="text-sm font-medium text-gray-700">Activar Anuncio</span>
-               </label>
+      <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="h-5 w-5 text-blue-500" /> Anuncio Global
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Este mensaje aparecerá a todos los usuarios.</p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-6">
+                   <label className="flex items-center gap-2 cursor-pointer select-none">
+                     <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${announcementData.isActive ? 'bg-blue-600 border-blue-600' : 'border-gray-300 bg-white'}`}>
+                        {announcementData.isActive && <ArrowUpRight className="h-3 w-3 text-white rotate-45" />}
+                        <input 
+                          type="checkbox" 
+                          className="hidden"
+                          checked={announcementData.isActive} 
+                          onChange={(e) => setAnnouncementData({...announcementData, isActive: e.target.checked})}
+                        />
+                     </div>
+                     <span className="text-sm font-medium text-gray-700">Activar Anuncio</span>
+                   </label>
 
-               <select 
-                 className="text-sm border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                 value={announcementData.type}
-                 onChange={(e) => setAnnouncementData({...announcementData, type: e.target.value})}
-               >
-                 <option value="INFO">Información (Azul)</option>
-                 <option value="WARNING">Advertencia (Amarillo)</option>
-                 <option value="ERROR">Crítico (Rojo)</option>
-               </select>
-            </div>
+                   <select 
+                     className="text-sm border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                     value={announcementData.type}
+                     onChange={(e) => setAnnouncementData({...announcementData, type: e.target.value})}
+                   >
+                     <option value="INFO">Información (Azul)</option>
+                     <option value="WARNING">Advertencia (Amarillo)</option>
+                     <option value="ERROR">Crítico (Rojo)</option>
+                   </select>
+                </div>
 
-            <div className="flex gap-2">
-              <Input 
-                placeholder="Escribe el mensaje aquí (Ej: Mantenimiento programado hoy a las 22:00hs)..." 
-                value={announcementData.message}
-                onChange={(e) => setAnnouncementData({...announcementData, message: e.target.value})}
-                className="flex-1"
-              />
-              <Button 
-                onClick={handleSaveAnnouncement} 
-                disabled={savingAnnouncement}
-                className="min-w-25"
-              >
-                {savingAnnouncement ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar'}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Mensaje del anuncio..." 
+                    value={announcementData.message}
+                    onChange={(e) => setAnnouncementData({...announcementData, message: e.target.value})}
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={handleSaveAnnouncement} 
+                    disabled={savingAnnouncement}
+                    className="min-w-24"
+                  >
+                    {savingAnnouncement ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar'}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-gray-700" /> Límites Plan Gratuito
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Controla las restricciones para cuentas FREE.</p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Max Alumnos</Label>
+                          <Input 
+                              type="number" 
+                              value={limits.maxStudents} 
+                              onChange={(e) => setLimits({...limits, maxStudents: Number(e.target.value)})}
+                          />
+                      </div>
+                      <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Max Clases Activas</Label>
+                          <Input 
+                              type="number" 
+                              value={limits.maxClasses} 
+                              onChange={(e) => setLimits({...limits, maxClasses: Number(e.target.value)})}
+                          />
+                      </div>
+                      <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Max Categorías</Label>
+                          <Input 
+                              type="number" 
+                              value={limits.maxCategories} 
+                              onChange={(e) => setLimits({...limits, maxCategories: Number(e.target.value)})}
+                          />
+                      </div>
+                  </div>
+                  <Button 
+                    onClick={handleSaveLimits} 
+                    disabled={savingLimits}
+                    className="w-full bg-gray-800 hover:bg-gray-900"
+                  >
+                    {savingLimits ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Actualizar Límites
+                  </Button>
+              </div>
+            </CardContent>
+          </Card>
+      </div>
     </div>
   );
 }

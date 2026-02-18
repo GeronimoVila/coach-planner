@@ -15,6 +15,7 @@ import {
   Clock, Trash2, Check, Ban, Copy, Users
 } from 'lucide-react';
 import useMediaQuery from '@/hooks/use-media-query';
+import { useUpgradeModal } from '@/context/upgrade-context';
 
 interface Category {
   id: number;
@@ -90,6 +91,7 @@ const getCategoryStyles = (categoryId: number, isCancelled = false) => {
 
 export default function ClassesPage() {
   const { user, isLoading: authLoading } = useAuth();
+  const { openUpgradeModal } = useUpgradeModal();
   const router = useRouter();
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
@@ -248,7 +250,13 @@ export default function ClassesPage() {
       setIsModalOpen(false);
       fetchData();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Error al crear');
+      toast.dismiss();
+
+      if (error.response?.data?.message?.includes('Límite de clases')) {
+          openUpgradeModal(); 
+      } else {
+          toast.error(error.response?.data?.message || 'Error al crear');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -278,31 +286,31 @@ export default function ClassesPage() {
     
     if (!confirm(message)) return;
 
-    const promise = api.post('/classes/clone-week', {
-      sourceWeekStart: weekStart.toISOString(),
-      targetWeekStart: nextWeekStart.toISOString()
-    });
-
-    toast.promise(promise, {
-      loading: 'Clonando semana...',
-      success: (res) => {
-        if (res.data.count === 0) {
-            return 'No hay clases para clonar en esta semana.';
-        }
-        return `¡Éxito! Se clonaron ${res.data.count} clases.`;
-      },
-      error: 'Error al intentar clonar la semana'
-    });
+    const toastId = toast.loading('Clonando semana...');
 
     try {
-      const res = await promise;
-      
-      if (res.data.count > 0) {
+      const res = await api.post('/classes/clone-week', {
+        sourceWeekStart: weekStart.toISOString(),
+        targetWeekStart: nextWeekStart.toISOString()
+      });
+
+      toast.dismiss(toastId);
+
+      if (res.data.count === 0) {
+         toast.info('No hay clases para clonar en esta semana.');
+      } else {
+         toast.success(`¡Éxito! Se clonaron ${res.data.count} clases.`);
          setWeekStart(nextWeekStart);
       }
-      
-    } catch (error) {
-      console.error(error);
+
+    } catch (err: any) {
+      toast.dismiss(); 
+
+      if (err.response?.data?.message?.includes('Límite de clases')) {
+          openUpgradeModal();
+      } else {
+          toast.error('Error al intentar clonar la semana');
+      }
     }
   };
 
@@ -456,7 +464,7 @@ export default function ClassesPage() {
                  {timeSlots.map((minutes) => (
                   <div key={minutes} className="grid grid-cols-8 min-h-25 border-b last:border-b-0">
                     <div className="p-2 text-xs font-medium text-gray-500 text-right pr-4 relative">
-                       <span className="-top-2 relative">{minutesToTime(minutes)}</span>
+                        <span className="-top-2 relative">{minutesToTime(minutes)}</span>
                     </div>
                     {weekDays.map((day, i) => {
                       const activeClass = getClassInSlot(day, minutes);
@@ -616,7 +624,7 @@ export default function ClassesPage() {
       {viewClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <Card className="w-full max-w-md shadow-xl rounded-xl animate-in fade-in zoom-in-95 duration-200">
-             <CardHeader className="border-b pb-4 relative">
+              <CardHeader className="border-b pb-4 relative">
                 <Button variant="ghost" size="icon" className="absolute right-4 top-4" onClick={() => setViewClass(null)}>
                     <X className="h-5 w-5" />
                 </Button>

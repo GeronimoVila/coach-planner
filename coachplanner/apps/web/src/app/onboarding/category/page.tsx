@@ -42,23 +42,15 @@ export default function OnboardingCategoryPage() {
     setIsSubmitting(true);
 
     try {
-      // 1. Guardar la categoría en la BD
       await api.students.updateCategory(token, selectedId);
       toast.success("¡Categoría guardada!");
 
-      // 2. SOLUCIÓN ROBUSTA: Pedir token nuevo con los datos actualizados
       const sessionData = await api.auth.refreshSession(token);
-      
-      // sessionData debe traer { access_token: '...', user: { ... } }
-      // Esto viene de tu auth.service.ts -> generateJwt
 
       if (sessionData.access_token && sessionData.user) {
-        console.log("🔄 Token refrescado exitosamente. Nueva categoría:", sessionData.user.categoryId);
         
-        // 3. Actualizar el contexto de React SIN recargar la página
         login(sessionData.access_token, sessionData.user);
 
-        // 4. Redirigir al dashboard (ahora el Guard verá el categoryId y dejará pasar)
         router.push('/'); 
       } else {
         throw new Error("Respuesta de sesión inválida");
@@ -67,7 +59,6 @@ export default function OnboardingCategoryPage() {
     } catch (error) {
       console.error(error);
       toast.error("Error al finalizar el registro. Intenta ingresar nuevamente.");
-      // Si falla el refresh, deslogueamos por seguridad
       logout();
     } finally {
       setIsSubmitting(false);

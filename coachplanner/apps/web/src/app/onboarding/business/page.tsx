@@ -13,7 +13,7 @@ import { Loader2, Briefcase } from 'lucide-react';
 
 export default function OnboardingBusinessPage() {
   const router = useRouter();
-  const { token, loginWithToken } = useAuth(); // <--- Usamos loginWithToken
+  const { token, loginWithToken } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',     
@@ -34,20 +34,14 @@ export default function OnboardingBusinessPage() {
          headers: { Authorization: `Bearer ${token}` }
       });
 
-      // --- CAMBIO CLAVE AQUÍ ---
-      // El backend ahora nos devuelve un nuevo token con el rol OWNER
       const newAccessToken = res.data.access_token;
 
       if (newAccessToken) {
-          console.log("🔄 Actualizando permisos de usuario...");
-          // Actualizamos el contexto y las cookies con el token nuevo
           loginWithToken(newAccessToken);
       }
-      // -------------------------
 
       toast.success('¡Todo listo!', { description: 'Tu gimnasio ha sido configurado.' });
       
-      // Esperamos un micro-segundo para que el estado se propague (opcional pero seguro)
       setTimeout(() => {
           router.push('/'); 
       }, 100);
@@ -61,7 +55,6 @@ export default function OnboardingBusinessPage() {
   };
 
   return (
-    // ... (Tu JSX sigue igual que antes)
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">

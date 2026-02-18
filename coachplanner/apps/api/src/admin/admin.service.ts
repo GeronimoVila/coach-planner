@@ -1,6 +1,6 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { Role } from '@repo/database';
+import { Role, PlanType } from '@repo/database';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -64,6 +64,7 @@ export class AdminService {
         slug: true,
         createdAt: true,
         isActive: true,
+        plan: true,
         owner: {
           select: {
             id: true,
@@ -89,6 +90,7 @@ export class AdminService {
       id: org.id,
       name: org.name,
       slug: org.slug,
+      plan: org.plan,
       owner: {
         id: org.owner.id,
         name: org.owner.fullName || org.owner.email,
@@ -112,6 +114,19 @@ export class AdminService {
     return this.db.organization.update({
       where: { id },
       data: { isActive: !org.isActive },
+    });
+  }
+
+  async updateOrganizationPlan(id: string, newPlan: string) {
+    const org = await this.db.organization.findUnique({
+      where: { id },
+    });
+
+    if (!org) throw new Error('Organización no encontrada');
+
+    return this.db.organization.update({
+      where: { id },
+      data: { plan: newPlan as any }, 
     });
   }
 

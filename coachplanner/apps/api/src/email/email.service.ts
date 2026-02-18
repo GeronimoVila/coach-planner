@@ -30,7 +30,6 @@ export class EmailService {
           </div>
         `
       });
-      console.log(`📧 Email de verificación enviado a ${email}`);
     } catch (error) {
       console.error('Error enviando email:', error);
     }
@@ -117,7 +116,6 @@ export class EmailService {
           </div>
         `
       });
-      console.log(`📧 Email de recuperación enviado a ${email}`);
     } catch (error) {
       console.error('Error enviando email de recuperación:', error);
     }

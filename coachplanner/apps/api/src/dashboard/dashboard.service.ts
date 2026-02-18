@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { BookingStatus, Role } from '@repo/database';
+import { BookingStatus, Role, PlanType } from '@repo/database';
 
 @Injectable()
 export class DashboardService {
@@ -57,9 +57,27 @@ export class DashboardService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    const org = await this.db.organization.findUnique({
+        where: { id: orgId },
+        select: { slug: true, plan: true }
+    });
+
     const activeStudents = await this.db.membership.count({
       where: { organizationId: orgId, role: Role.STUDENT }
     });
+
+    let maxStudents = 0; 
+    let isPro = false;
+
+    if (org?.plan === PlanType.PRO) {
+        isPro = true;
+        maxStudents = 9999;
+    } else {
+        const limits = await this.db.planLimits.findUnique({
+            where: { plan: PlanType.FREE }
+        });
+        maxStudents = limits?.maxStudents || 5;
+    }
 
     const classesToday = await this.db.classSession.count({
       where: {
@@ -83,15 +101,12 @@ export class DashboardService {
       }
     });
 
-    const org = await this.db.organization.findUnique({
-        where: { id: orgId },
-        select: { slug: true }
-    });
-
     return {
       role: 'OWNER',
       cards: {
         activeStudents,
+        maxStudents,
+        isPro,
         classesToday,
         expiringPacks,
         registerSlug: org?.slug || '' 

@@ -24,6 +24,11 @@ enum BookingStatus {
   ABSENT
 }
 
+enum PlanType {
+  FREE
+  PRO
+}
+
 // --- MODELOS ---
 
 model User {
@@ -57,6 +62,7 @@ model Organization {
   ownerId             String   @map("owner_id")
   
   // Configuración
+  plan        PlanType @default(FREE)
   slotDurationMinutes Int      @default(60) @map("slot_duration")
   cancellationWindow  Int      @default(2)  @map("cancellation_window")
   openHour            Int      @default(7)  @map("open_hour")
@@ -179,4 +185,18 @@ model Announcement {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("announcements")
+}
+
+model PlanLimits {
+  id             String   @id @default(cuid())
+  plan           PlanType @unique
+  
+  maxStudents    Int      @default(5)
+  maxCategories  Int      @default(2)
+  maxClasses     Int      @default(10)
+  
+  canExportData  Boolean  @default(false)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

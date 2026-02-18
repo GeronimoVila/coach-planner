@@ -7,7 +7,6 @@ export class AppController {
 
   @Get()
   async getHello() {
-    console.log('📢 Petición recibida en la API');
 
     const usersCount = await this.db.user.count();
 
