@@ -88,7 +88,7 @@ export default function Sidebar() {
           </nav>
 
           <div className="border-t p-4">
-             {(user.role === 'OWNER') && (
+             {(user.role === 'OWNER' && user.plan !== 'PRO') && (
                  <div className="mb-4">
                     <Button 
                         onClick={openUpgradeModal}

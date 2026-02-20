@@ -22,9 +22,12 @@ export class CategoriesService {
     });
   }
 
-  async findAll(orgId: string) {
+  async findAll(orgId: string, includeAll: boolean = false) {
     return this.db.category.findMany({
-      where: { organizationId: orgId },
+      where: { 
+        organizationId: orgId,
+        ...(includeAll ? {} : { isActive: true })
+      },
       orderBy: { name: 'asc' }
     });
   }
@@ -50,11 +53,20 @@ export class CategoriesService {
     });
   }
 
+  async toggleStatus(id: number, orgId: string) {
+    const category = await this.findOne(id, orgId);
+
+    return this.db.category.update({
+      where: { id },
+      data: { isActive: !category.isActive },
+    });
+  }
+
   async remove(id: number, orgId: string) {
     await this.findOne(id, orgId);
-
-    return this.db.category.delete({
+    return this.db.category.update({
       where: { id },
+      data: { isActive: false },
     });
   }
 }

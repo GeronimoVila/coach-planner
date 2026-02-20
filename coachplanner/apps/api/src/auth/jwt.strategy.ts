@@ -26,7 +26,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (user.role === Role.ADMIN) {
         return { 
-            id: payload.sub,     // <--- CAMBIADO: de 'userId' a 'id'
+            id: payload.sub,
             email: payload.email, 
             role: payload.role,
             orgId: payload.orgId 
@@ -56,7 +56,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
     }
     return { 
-      id: payload.sub,      // <--- CAMBIADO: de 'userId' a 'id'
+      id: payload.sub,
       email: payload.email, 
       role: payload.role,
       orgId: payload.orgId 

@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, ArrowLeft, Tag } from 'lucide-react';
+import { Loader2, Plus, ArrowLeft, Tag, PowerOff, CheckCircle2 } from 'lucide-react';
 import { useUpgradeModal } from '@/context/upgrade-context';
 
 interface Category {
   id: number;
   name: string;
+  isActive: boolean;
 }
 
 export default function CategoriesPage() {
@@ -40,7 +41,7 @@ export default function CategoriesPage() {
 
   const fetchCategories = async () => {
     try {
-      const res = await api.get('/categories');
+      const res = await api.get('/categories?all=true');
       setCategories(res.data);
     } catch (error) {
       toast.error('Error al cargar categorías');
@@ -56,7 +57,7 @@ export default function CategoriesPage() {
     setCreating(true);
     try {
       const res = await api.post('/categories', { name: newName });
-      setCategories([...categories, res.data]);
+      setCategories([...categories, { ...res.data, isActive: true }]);
       setNewName('');
       toast.success('Categoría creada');
     } catch (error: any) {
@@ -72,15 +73,21 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Seguro que quieres borrar esta categoría?')) return;
+  const handleToggleStatus = async (cat: Category) => {
+    if (cat.isActive) {
+      if (!confirm('¿Seguro que quieres desactivar esta categoría? Ya no aparecerá al crear clases o alumnos nuevos.')) return;
+    }
 
     try {
-      await api.delete(`/categories/${id}`);
-      setCategories(categories.filter((c) => c.id !== id));
-      toast.success('Categoría eliminada');
+      await api.patch(`/categories/${cat.id}/toggle`); 
+      
+      setCategories(categories.map(c => 
+        c.id === cat.id ? { ...c, isActive: !c.isActive } : c
+      ));
+
+      toast.success(cat.isActive ? 'Categoría desactivada' : 'Categoría reactivada');
     } catch (error) {
-      toast.error('No se pudo borrar. Quizás tiene clases asociadas.');
+      toast.error('No se pudo cambiar el estado de la categoría.');
     }
   };
 
@@ -143,16 +150,35 @@ export default function CategoriesPage() {
                   categories.map((cat) => (
                     <div 
                       key={cat.id} 
-                      className="flex items-center justify-between p-3 bg-white border rounded-md shadow-sm group hover:border-primary/50 transition-colors"
+                      className={`flex items-center justify-between p-3 border rounded-md shadow-sm transition-colors ${
+                        cat.isActive 
+                          ? 'bg-white hover:border-primary/50 group' 
+                          : 'bg-gray-50 border-dashed opacity-75'
+                      }`}
                     >
-                      <span className="font-medium">{cat.name}</span>
+                      <div className="flex items-center gap-3">
+                        <span className={`font-medium ${!cat.isActive && 'text-gray-500 line-through'}`}>
+                          {cat.name}
+                        </span>
+                        {!cat.isActive && (
+                          <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-semibold">
+                            Inactiva
+                          </span>
+                        )}
+                      </div>
+
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="text-muted-foreground hover:text-destructive opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                        onClick={() => handleDelete(cat.id)}
+                        className={`transition-opacity ${
+                          cat.isActive 
+                            ? 'text-gray-400 hover:text-orange-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100' 
+                            : 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                        }`}
+                        onClick={() => handleToggleStatus(cat)}
+                        title={cat.isActive ? "Desactivar categoría" : "Reactivar categoría"}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        {cat.isActive ? <PowerOff className="h-4 w-4" /> : <CheckCircle2 className="h-5 w-5" />}
                       </Button>
                     </div>
                   ))

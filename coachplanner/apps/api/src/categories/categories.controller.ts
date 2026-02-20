@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -20,9 +20,9 @@ export class CategoriesController {
   }
 
   @Get()
-  findAll(@Request() req) {
+  findAll(@Request() req, @Query('all') all?: string) {
     const orgId = req.user.organizationId || req.user.orgId;
-    return this.categoriesService.findAll(orgId);
+    return this.categoriesService.findAll(orgId, all === 'true');
   }
 
   @Get(':id')
@@ -36,6 +36,13 @@ export class CategoriesController {
   update(@Param('id') id: string, @Body() updateCategoryDto: UpdateCategoryDto, @Request() req) {
     const orgId = req.user.organizationId || req.user.orgId;
     return this.categoriesService.update(+id, updateCategoryDto, orgId);
+  }
+
+  @Patch(':id/toggle')
+  @Roles(Role.ADMIN, Role.OWNER)
+  toggleStatus(@Param('id') id: string, @Request() req) {
+    const orgId = req.user.organizationId || req.user.orgId;
+    return this.categoriesService.toggleStatus(+id, orgId);
   }
 
   @Delete(':id')

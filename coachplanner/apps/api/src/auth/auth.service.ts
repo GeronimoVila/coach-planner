@@ -21,7 +21,7 @@ export class AuthService {
     private readonly plansService: PlansService
   ) {}
 
-  async validateOAuthUser(profile: any) {
+  async validateOAuthUser(profile: any, action: string = 'login') {
     let user = await this.db.user.findUnique({
       where: { email: profile.email },
       include: { 
@@ -31,16 +31,21 @@ export class AuthService {
     });
 
     if (!user) {
-      user = await this.db.user.create({
-        data: {
-          email: profile.email,
-          fullName: `${profile.firstName} ${profile.lastName}`,
-          avatarUrl: profile.picture,
-          provider: 'GOOGLE',
-          emailVerified: new Date(),
-        },
-        include: { memberships: true, organizationsOwned: true }
-      });
+      if (action === 'login') {
+         throw new NotFoundException('user_not_found');
+      } 
+      else {
+         user = await this.db.user.create({
+           data: {
+             email: profile.email,
+             fullName: `${profile.firstName} ${profile.lastName}`,
+             avatarUrl: profile.picture,
+             provider: 'GOOGLE',
+             emailVerified: new Date(),
+           },
+           include: { memberships: true, organizationsOwned: true }
+         });
+      }
     } else {
       if (user.provider === 'GOOGLE' || !user.avatarUrl) {
          user = await this.db.user.update({
@@ -196,7 +201,7 @@ export class AuthService {
 
     } catch (error) {
       console.error(error);
-      throw new InternalServerErrorException('Error al registrar usuario');
+      throw new InternalServerErrorException('Ocurrió un error inesperado al crear tu cuenta. Por favor, intenta de nuevo en unos minutos.');
     }
   }
 
@@ -213,6 +218,7 @@ export class AuthService {
         id: true,
         plan: true,
         categories: {
+          where: { isActive: true },
           select: { id: true, name: true },
         }
       }
@@ -354,8 +360,11 @@ export class AuthService {
       }
     });
     
-    if (!user || !user.passwordHash) {
+    if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
+    }
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('Tu cuenta está vinculada a Google. Por favor, inicia sesión con Google.');
     }
     if (!user.emailVerified) {
         throw new UnauthorizedException('Debes verificar tu correo electrónico antes de ingresar. Revisa tu bandeja de entrada.');
@@ -410,21 +419,25 @@ export class AuthService {
     let primaryRole: Role = Role.STUDENT; 
     let orgId: string | null = null; 
     let categoryId: number | null = null;
+    let plan: string = 'FREE'; 
 
     if (user.role === Role.ADMIN) {
         primaryRole = Role.ADMIN;
-        if (user.organizationsOwned.length > 0) {
+        if (user.organizationsOwned && user.organizationsOwned.length > 0) {
             orgId = user.organizationsOwned[0].id;
+            plan = user.organizationsOwned[0].plan || 'FREE';
         }
     } 
-    else if (user.organizationsOwned.length > 0) {
+    else if (user.organizationsOwned && user.organizationsOwned.length > 0) {
       primaryRole = Role.OWNER;
       orgId = user.organizationsOwned[0].id;
+      plan = user.organizationsOwned[0].plan || 'FREE';
+      
       const ownedOrg = user.organizationsOwned[0];
       if (ownedOrg && !ownedOrg.isActive) {
         throw new UnauthorizedException('Tu gimnasio ha sido suspendido. Contacta a soporte.');
       }
-    } else if (user.memberships.length > 0) {
+    } else if (user.memberships && user.memberships.length > 0) {
       primaryRole = user.memberships[0].role;
       orgId = user.memberships[0].organizationId;
       categoryId = user.memberships[0].categoryId;
@@ -436,6 +449,7 @@ export class AuthService {
       role: primaryRole,
       orgId: orgId,
       categoryId: categoryId,
+      plan: plan,
       fullName: user.fullName,
       avatarUrl: user.avatarUrl
     };
@@ -449,7 +463,8 @@ export class AuthService {
         avatarUrl: user.avatarUrl,
         role: primaryRole,
         organizationId: orgId,
-        categoryId: categoryId
+        categoryId: categoryId,
+        plan: plan
       }
     };
   }
@@ -488,7 +503,7 @@ export class AuthService {
         });
     } catch (dbError) {
         console.error("🔥 [AuthService] Error crítico actualizando el token en la BD:", dbError);
-        throw new InternalServerErrorException("Error al procesar la solicitud en la base de datos.");
+        throw new InternalServerErrorException('Ocurrió un problema temporal al generar tu enlace de recuperación. Inténtalo de nuevo.');
     }
 
     try {

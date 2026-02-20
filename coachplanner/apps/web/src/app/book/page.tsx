@@ -58,7 +58,9 @@ const formatDuration = (minutes: number) => {
   return `${m}m`;
 };
 
-const getCategoryBorderColor = (categoryId: number) => {
+  const getCategoryBorderColor = (categoryId?: number | null) => {
+    if (!categoryId) return 'border-gray-300';
+    
     const borders: { [key: number]: string } = {
       1: 'border-blue-500', 
       2: 'border-purple-500',

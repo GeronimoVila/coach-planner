@@ -103,6 +103,7 @@ model Category {
   id             Int      @id @default(autoincrement())
   organizationId String   @map("organization_id")
   name           String
+  isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
 
   organization   Organization   @relation(fields: [organizationId], references: [id])
@@ -136,17 +137,16 @@ model ClassSession {
   endTime        DateTime @map("end_time")
   capacity       Int
   instructorId   String   @map("instructor_id")
-  categoryId     Int      @map("category_id")
+  categoryId     Int?     @map("category_id")
   isCancelled    Boolean  @default(false) @map("is_cancelled")
 
   organization   Organization @relation(fields: [organizationId], references: [id])
   instructor     User         @relation(fields: [instructorId], references: [id])
-  category       Category     @relation(fields: [categoryId], references: [id])
+  category       Category?    @relation(fields: [categoryId], references: [id]) 
   bookings       Booking[]
 
   @@map("class_sessions")
 }
-
 model Booking {
   id              String        @id @default(uuid())
   userId          String        @map("user_id")

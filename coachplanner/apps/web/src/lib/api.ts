@@ -26,18 +26,14 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     const statusCode = error.response?.status;
-    const errorMessage = error.response?.data?.message || 'Ocurrió un error inesperado';
 
-    if (statusCode === 401 || statusCode === 403) {
+    if (statusCode === 401) {
       if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         console.warn('⛔ Sesión invalidada. Redirigiendo al login...');
-        
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        
         document.cookie = 'token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
         document.cookie = 'role=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-
         window.location.href = '/login?reason=session_expired';
         return Promise.reject(error);
       }
@@ -45,12 +41,10 @@ axiosInstance.interceptors.response.use(
 
     if (!statusCode || statusCode >= 500) {
       Sentry.captureException(error);
-    }
-
-    if (statusCode !== 401) {
-      toast.error('Error del sistema', {
-        description: Array.isArray(errorMessage) ? errorMessage[0] : errorMessage,
+      toast.error('Error de conexión', {
+        description: 'Tenemos un problema técnico temporal. Por favor, intenta de nuevo más tarde.',
       });
+      return Promise.reject(error);
     }
     
     return Promise.reject(error);

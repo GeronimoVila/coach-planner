@@ -7,14 +7,12 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-// Definimos la interfaz aquí para solucionar el error de tipo
 interface Category {
   id: number;
   name: string;
 }
 
 export default function OnboardingCategoryPage() {
-  // Extraemos 'login' también para actualizar el estado manualmente
   const { token, login, logout } = useAuth(); 
   const router = useRouter();
   
@@ -27,34 +25,38 @@ export default function OnboardingCategoryPage() {
     if (!token) return;
 
     api.students.getAvailableCategories(token)
-      .then((data: Category[]) => { // <--- Solución al error 'implicit any'
+      .then((data: Category[]) => { 
          setCategories(data);
          setIsLoading(false);
       })
       .catch((err) => {
         console.error(err);
         toast.error("Error cargando las categorías");
+        setIsLoading(false);
       });
   }, [token]);
 
   const handleSubmit = async () => {
-    if (!selectedId || !token) return;
+    if (categories.length > 0 && !selectedId) return;
+    if (!token) return;
+    
     setIsSubmitting(true);
 
     try {
-      await api.students.updateCategory(token, selectedId);
-      toast.success("¡Categoría guardada!");
+      if (categories.length > 0 && selectedId) {
+          await api.students.updateCategory(token, selectedId);
+          toast.success("¡Categoría guardada!");
 
-      const sessionData = await api.auth.refreshSession(token);
+          const sessionData = await api.auth.refreshSession(token);
 
-      if (sessionData.access_token && sessionData.user) {
-        
-        login(sessionData.access_token, sessionData.user);
-
-        router.push('/'); 
-      } else {
-        throw new Error("Respuesta de sesión inválida");
+          if (sessionData.access_token && sessionData.user) {
+            login(sessionData.access_token, sessionData.user);
+          } else {
+            throw new Error("Respuesta de sesión inválida");
+          }
       }
+
+      router.push('/'); 
 
     } catch (error) {
       console.error(error);
@@ -69,6 +71,33 @@ export default function OnboardingCategoryPage() {
     return <div className="min-h-screen flex items-center justify-center">Cargando opciones...</div>;
   }
 
+  if (categories.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full space-y-8 text-center bg-white p-8 rounded-xl shadow-lg border">
+          <div>
+            <div className="h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+              🎉
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">¡Registro Completado!</h1>
+            <p className="mt-2 text-gray-600">
+              Tu gimnasio no requiere seleccionar una disciplina específica. Ya puedes empezar a reservar tus clases.
+            </p>
+          </div>
+
+          <Button 
+            size="lg" 
+            className="w-full bg-blue-600 hover:bg-blue-700" 
+            disabled={isSubmitting}
+            onClick={handleSubmit}
+          >
+            {isSubmitting ? 'Entrando...' : 'Ir a mi Dashboard →'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
       <div className="max-w-md w-full space-y-8 text-center bg-white p-8 rounded-xl shadow-lg">
@@ -78,7 +107,7 @@ export default function OnboardingCategoryPage() {
           <p className="mt-2 text-gray-600">Para personalizar tu experiencia, necesitamos saber qué practicas.</p>
         </div>
 
-        <div className="grid gap-3 text-left">
+        <div className="grid gap-3 text-left max-h-96 overflow-y-auto pr-1">
           {categories.map((cat) => (
             <div 
               key={cat.id}

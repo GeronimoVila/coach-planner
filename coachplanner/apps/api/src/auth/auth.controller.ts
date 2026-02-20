@@ -1,5 +1,5 @@
 import type { Response } from 'express'; 
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Request, Param, Res, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Request, Param, Res, Query, BadRequestException, ExecutionContext, Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { RegisterOwnerDto } from './dto/create-auth.dto';
@@ -9,22 +9,40 @@ import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
 import { Role } from '@repo/database';
 
+@Injectable()
+export class GoogleAuthGuard extends AuthGuard('google') {
+  getAuthenticateOptions(context: ExecutionContext) {
+    const req = context.switchToHttp().getRequest();
+    return {
+      state: req.query.action || 'login',
+    };
+  }
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   async googleAuth(@Request() req) {
   }
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  async googleAuthRedirect(@Request() req, @Res() res: Response) {
-    const result = await this.authService.validateOAuthUser(req.user);
+  async googleAuthRedirect(@Request() req, @Res() res: Response, @Query('state') state: string) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const action = state || 'login';
 
-    return res.redirect(`${frontendUrl}/auth/callback?token=${result.access_token}&status=success`);
+    try {
+      const result = await this.authService.validateOAuthUser(req.user, action);
+      return res.redirect(`${frontendUrl}/auth/callback?token=${result.access_token}&status=success`);
+    } catch (error: any) {
+      if (error.status === 404 || error.message === 'user_not_found') {
+        return res.redirect(`${frontendUrl}/login?error=not_registered`);
+      }
+      return res.redirect(`${frontendUrl}/login?error=auth_failed`);
+    }
   }
 
   @Get('verify')

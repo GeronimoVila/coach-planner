@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -47,6 +47,28 @@ export default function LoginPage() {
       password: "",
     },
   });
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get('error');
+
+        if (error === 'not_registered') {
+          toast.error("Tu cuenta no está registrada", { 
+            description: "El correo de Google que elegiste no existe en nuestro sistema. Por favor, regístrate primero.",
+            duration: 8000 
+          });
+          window.history.replaceState(null, '', '/login');
+        } else if (error === 'auth_failed') {
+          toast.error("Ocurrió un error al intentar iniciar sesión con Google.");
+          window.history.replaceState(null, '', '/login');
+        }
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -175,7 +197,6 @@ export default function LoginPage() {
           <GoogleButton mode="LOGIN" />
 
           <div className="mt-2 text-center text-sm space-y-2">
-
             <div className="pt-2 border-t mt-2">
               <span className="text-muted-foreground">¿Eres instructor? </span>
               <Link 
@@ -185,7 +206,6 @@ export default function LoginPage() {
                 Crea tu cuenta de Profesor
               </Link>
             </div>
-
           </div>
 
           <p className="px-8 text-center text-xs text-muted-foreground pt-4">

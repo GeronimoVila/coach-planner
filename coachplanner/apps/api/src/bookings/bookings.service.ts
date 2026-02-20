@@ -7,7 +7,6 @@ import {
 import { DatabaseService } from 'src/database/database.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingStatus } from '@repo/database';
-import { ForbiddenException } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -166,7 +165,7 @@ export class BookingsService {
       const diffInHours = (classStart.getTime() - now.getTime()) / (1000 * 60 * 60);
 
       if (diffInHours < org.cancellationWindow) {
-        throw new ForbiddenException(
+        throw new BadRequestException(
           `Ya no puedes cancelar. Debes hacerlo con ${org.cancellationWindow} horas de anticipación.`
         );
       }

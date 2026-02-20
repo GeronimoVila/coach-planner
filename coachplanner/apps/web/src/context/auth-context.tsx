@@ -10,6 +10,7 @@ interface JwtPayload {
   role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
   orgId?: string;
   categoryId?: number;
+  plan?: string;
   fullName?: string;
   avatarUrl?: string;
   exp?: number;
@@ -21,6 +22,7 @@ export interface User {
   role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
   organizationId: string | null;
   categoryId?: number | null;
+  plan?: string;
   fullName?: string;
   avatarUrl?: string;
 }
@@ -76,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithToken = useCallback((newToken: string) => {
     try {
-      
       const decoded = jwtDecode<JwtPayload>(newToken);
 
       const userData: User = {
@@ -85,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: decoded.role || 'STUDENT',
         organizationId: decoded.orgId || null,
         categoryId: decoded.categoryId ?? null,
+        plan: decoded.plan || 'FREE',
         fullName: decoded.fullName || '',
         avatarUrl: decoded.avatarUrl || ''
       };

@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
+import { api } from '@/lib/api';
 
 export default function StudentGuard({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
+  const { user, token, isLoading } = useAuth(); 
   const router = useRouter();
   const pathname = usePathname();
   const [isChecking, setIsChecking] = useState(true);
@@ -13,26 +14,36 @@ export default function StudentGuard({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (isLoading) return;
 
-    if (
-      user && 
-      user.role === 'STUDENT' && 
-      user.organizationId && 
-      !user.categoryId && 
-      pathname !== '/onboarding/category'
-    ) {
-      router.replace('/onboarding/category');
-    } else {
-      setIsChecking(false);
-    }
-  }, [user, isLoading, pathname, router]);
+    const verifyStudentStatus = async () => {
+      if (
+        user && 
+        user.role === 'STUDENT' && 
+        user.organizationId && 
+        !user.categoryId && 
+        pathname !== '/onboarding/category'
+      ) {
+        try {
+          const categories = await api.students.getAvailableCategories(token!);
+          
+          if (categories && categories.length > 0) {
+            router.replace('/onboarding/category');
+            return;
+          } else {
+            setIsChecking(false);
+          }
+        } catch (error) {
+          console.error("Error verificando categorías:", error);
+          setIsChecking(false); 
+        }
+      } else {
+        setIsChecking(false);
+      }
+    };
 
-  if (
-    !isLoading && 
-    user?.role === 'STUDENT' && 
-    user?.organizationId &&
-    !user?.categoryId && 
-    pathname !== '/onboarding/category'
-  ) {
+    verifyStudentStatus();
+  }, [user, token, isLoading, pathname, router]);
+
+  if (isLoading || isChecking) {
     return null; 
   }
 

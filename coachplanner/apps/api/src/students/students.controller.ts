@@ -72,7 +72,10 @@ export class StudentsController {
       if (!orgId) throw new BadRequestException('Sin organización');
       
       return this.studentsService['db'].category.findMany({ 
-          where: { organizationId: orgId },
+          where: { 
+            organizationId: orgId,
+            isActive: true 
+          },
           select: { id: true, name: true }
       });
   }

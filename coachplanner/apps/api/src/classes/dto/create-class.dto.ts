@@ -25,7 +25,7 @@ export class CreateClassDto {
   @Min(1)
   capacity: number;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsInt()
-  categoryId: number;
+  categoryId?: number;
 }

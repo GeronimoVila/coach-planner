@@ -14,18 +14,22 @@ export function GoogleButton({ mode, gymSlug, text, className }: GoogleButtonPro
   
   const handleGoogleLogin = () => {
     let intent = {};
+    let actionStr = 'login'; 
 
     if (mode === 'JOIN_GYM' && gymSlug) {
       intent = { type: 'JOIN_GYM', slug: gymSlug };
+      actionStr = `join_gym_${gymSlug}`;
     } else if (mode === 'REGISTER_OWNER') {
       intent = { type: 'REGISTER_OWNER' };
+      actionStr = 'register';
     } else {
       intent = { type: 'LOGIN' };
+      actionStr = 'login';
     }
 
     localStorage.setItem('auth_intent', JSON.stringify(intent));
 
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/google`;
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/auth/google?action=${actionStr}`;
   };
 
   return (

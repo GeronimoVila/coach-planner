@@ -185,7 +185,7 @@ export class AdminService {
     });
 
     if (existingUser && existingUser.id !== userId) {
-      throw new ConflictException('Este email ya está siendo usado por otro usuario.');
+      throw new ConflictException('Este email ya está registrado.');
     }
 
     return this.db.user.update({

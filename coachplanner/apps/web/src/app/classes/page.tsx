@@ -29,7 +29,7 @@ interface ClassSession {
   startTime: string;
   endTime: string;
   capacity: number;
-  category: Category;
+  category: Category | null;
   _count?: { bookings: number };
   instructor?: { name: string, avatarUrl?: string }; 
   isCancelled?: boolean;
@@ -77,8 +77,9 @@ const formatDuration = (minutes: number) => {
   return `${m}m`;
 };
 
-const getCategoryStyles = (categoryId: number, isCancelled = false) => {
+const getCategoryStyles = (categoryId?: number | null, isCancelled = false) => {
   if (isCancelled) return 'bg-gray-100 border-l-4 border-gray-400 text-gray-400 opacity-60';
+  if (!categoryId) return 'bg-gray-50 border-l-4 border-gray-400 text-gray-700';
 
   const styles: { [key: number]: string } = {
     1: 'bg-blue-50 border-l-4 border-blue-500 text-blue-700', 
@@ -241,7 +242,7 @@ export default function ClassesPage() {
         startTime: new Date(formData.start).toISOString(),
         endTime: new Date(formData.end).toISOString(),
         capacity: Number(formData.capacity),
-        categoryId: Number(formData.categoryId)
+        categoryId: formData.categoryId ? Number(formData.categoryId) : null 
       };
 
       await api.post('/classes', payload);
@@ -262,18 +263,24 @@ export default function ClassesPage() {
     }
   };
 
-  const handleCancelClass = async (e: React.MouseEvent, id: string) => {
+  const handleCancelClass = async (e: React.MouseEvent, id: string, startTime: string) => {
     e.stopPropagation(); 
-    if (!confirm('¿Cancelar esta clase? Se reembolsarán los créditos a todos los inscriptos.')) return;
+    
+    const isPast = new Date(startTime) < new Date();
+    const confirmMessage = isPast 
+        ? '¿Cancelar esta clase pasada? IMPORTANTE: Al ser del pasado, no se reembolsarán los créditos a los alumnos.'
+        : '¿Cancelar esta clase? Se reembolsarán los créditos a todos los inscriptos.';
+
+    if (!confirm(confirmMessage)) return;
     
     try {
-      await api.patch(`/classes/${id}/cancel`);
+      const res = await api.patch(`/classes/${id}/cancel`);
       
       setClasses(prev => prev.map(c => c.id === id ? { ...c, isCancelled: true } : c));
       
       if (viewClass?.id === id) setViewClass(null);
 
-      toast.success('Clase cancelada y créditos devueltos');
+      toast.success(res.data?.message || 'Clase cancelada con éxito');
     } catch (error: any) { 
         toast.error(error.response?.data?.message || 'Error al cancelar'); 
     }
@@ -468,7 +475,7 @@ export default function ClassesPage() {
                     </div>
                     {weekDays.map((day, i) => {
                       const activeClass = getClassInSlot(day, minutes);
-                      const categoryStyle = activeClass ? getCategoryStyles(activeClass.category.id, activeClass.isCancelled) : '';
+                      const categoryStyle = activeClass ? getCategoryStyles(activeClass.category?.id, activeClass.isCancelled) : '';
 
                       return (
                         <div 
@@ -483,18 +490,18 @@ export default function ClassesPage() {
                             >
                               
                               {!activeClass.isCancelled && (
-                                  <button 
-                                    onClick={(e) => handleCancelClass(e, activeClass.id)}
-                                    className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-red-500 opacity-0 group-hover/card:opacity-100 hover:bg-red-100 transition-all z-10"
-                                    title="Cancelar clase y devolver créditos"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </button>
+                                <button 
+                                  onClick={(e) => handleCancelClass(e, activeClass.id, activeClass.startTime)}
+                                  className="absolute top-1 right-1 p-1 bg-white/80 rounded-full text-red-500 opacity-0 group-hover/card:opacity-100 hover:bg-red-100 transition-all z-10"
+                                  title="Cancelar clase"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
                               )}
 
                               <div>
                                 <h3 className="font-bold text-sm truncate pr-4">{activeClass.title}</h3>
-                                <p className="text-[11px] opacity-80 truncate">{activeClass.category.name}</p>
+                                <p className="text-[11px] opacity-80 truncate">{activeClass.category?.name || 'General'}</p>
                               </div>
                               <div className="flex justify-between items-end mt-2">
                                 <div className="flex items-center text-xs font-medium gap-1">
@@ -524,7 +531,7 @@ export default function ClassesPage() {
           {timeSlots.map((minutes) => {
             const activeClass = getClassInSlot(selectedDate, minutes);
             const categoryStyle = activeClass 
-              ? getCategoryStyles(activeClass.category.id, activeClass.isCancelled) 
+              ? getCategoryStyles(activeClass.category?.id, activeClass.isCancelled)
               : '';
 
             return (
@@ -541,7 +548,7 @@ export default function ClassesPage() {
                       <div className="flex justify-between items-start">
                         <div className="overflow-hidden">
                           <h3 className="font-bold text-base truncate">{activeClass.title}</h3>
-                          <p className="text-xs opacity-80 font-medium">{activeClass.category.name}</p>
+                          <p className="text-xs opacity-80 font-medium">{activeClass.category?.name || 'General'}</p>
                         </div>
                         
                         {!activeClass.isCancelled && (
@@ -549,7 +556,7 @@ export default function ClassesPage() {
                             variant="ghost" 
                             size="icon" 
                             className="h-8 w-8 -mt-2 -mr-2 text-inherit opacity-50 hover:opacity-100"
-                            onClick={(e) => handleCancelClass(e, activeClass.id)}
+                            onClick={(e) => handleCancelClass(e, activeClass.id, activeClass.startTime)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -601,15 +608,22 @@ export default function ClassesPage() {
                   <div><Label>Inicio</Label><Input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} /></div>
                   <div><Label>Fin</Label><Input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} /></div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><Label>Cupo</Label><Input type="number" min="1" value={formData.capacity} onChange={e => setFormData({...formData, capacity: Number(e.target.value)})} /></div>
-                  <div>
-                    <Label>Categoría</Label>
-                    <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" required value={formData.categoryId} onChange={e => setFormData({...formData, categoryId: e.target.value})}>
-                      <option value="">Seleccionar...</option>
-                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
+                <div className={`grid ${categories.length > 0 ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                  <div><Label>Cupo</Label><Input type="number" min="1" value={formData.capacity} onChange={e => setFormData({...formData, capacity: Number(e.target.value)})} /></div>                  
+                  {categories.length > 0 && (
+                      <div>
+                        <Label>Categoría</Label>
+                        <select 
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" 
+                            required
+                            value={formData.categoryId} 
+                            onChange={e => setFormData({...formData, categoryId: e.target.value})}
+                        >
+                          <option value="">Seleccionar...</option>
+                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                  )}
                 </div>
                 <div><Label>Descripción</Label><Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Detalles..." /></div>
                 <Button type="submit" className="w-full" disabled={submitting}>
@@ -629,7 +643,9 @@ export default function ClassesPage() {
                     <X className="h-5 w-5" />
                 </Button>
                 <div className="flex flex-col gap-1">
-                    <span className="text-xs font-bold uppercase text-primary tracking-wider">{viewClass.category.name}</span>
+                    <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">
+                      {viewClass.category?.name || 'GENERAL'}
+                    </span>
                     <CardTitle className="text-2xl">{viewClass.title}</CardTitle>
                     <p className="text-sm text-gray-500 flex items-center gap-2">
                         <Clock className="h-4 w-4" />

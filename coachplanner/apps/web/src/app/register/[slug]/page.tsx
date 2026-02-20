@@ -134,7 +134,7 @@ export default function RegisterStudentPage() {
             name: formData.name,
             email: formData.email,
             password: formData.password,
-            categoryId: formData.categoryId ? Number(formData.categoryId) : undefined
+            categoryId: categories.length > 0 && formData.categoryId ? Number(formData.categoryId) : undefined
         }),
       });
 

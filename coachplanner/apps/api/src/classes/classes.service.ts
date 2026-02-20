@@ -28,12 +28,14 @@ export class ClassesService {
       throw new BadRequestException('No puedes crear una clase en el pasado');
     }
 
-    const category = await this.db.category.findUnique({
-      where: { id: createClassDto.categoryId },
-    });
+    if (createClassDto.categoryId) {
+        const category = await this.db.category.findUnique({
+          where: { id: createClassDto.categoryId },
+        });
 
-    if (!category || category.organizationId !== orgId) {
-      throw new BadRequestException('La categoría seleccionada no es válida');
+        if (!category || category.organizationId !== orgId) {
+          throw new BadRequestException('La categoría seleccionada no es válida');
+        }
     }
 
     return this.db.classSession.create({
@@ -41,6 +43,7 @@ export class ClassesService {
         ...createClassDto,
         organizationId: orgId,
         instructorId: instructorId,
+
       },
     });
   }
@@ -150,38 +153,54 @@ export class ClassesService {
         data: { isCancelled: true }
       });
 
+      const now = new Date();
+      const shouldRefund = session.startTime > now; 
+
       for (const booking of session.bookings) {
         await tx.booking.update({
           where: { id: booking.id },
           data: { status: BookingStatus.CANCELLED }
         });
 
-        await tx.creditPackage.update({
-          where: { id: booking.creditPackageId },
-          data: { remainingAmount: { increment: 1 } }
-        });
-        
-        await tx.membership.update({
-            where: { userId_organizationId: { userId: booking.userId, organizationId: orgId } },
-            data: { credits: { increment: 1 } }
-        });
+        if (shouldRefund) {
+            await tx.creditPackage.update({
+              where: { id: booking.creditPackageId },
+              data: { remainingAmount: { increment: 1 } }
+            });
+            
+            await tx.membership.update({
+                where: { userId_organizationId: { userId: booking.userId, organizationId: orgId } },
+                data: { credits: { increment: 1 } }
+            });
+        }
       }
+
+      const message = shouldRefund 
+        ? `Clase cancelada. Se reembolsaron ${session.bookings.length} créditos.`
+        : `Clase del pasado cancelada. No se reembolsaron créditos.`;
 
       return { 
         session,
-        message: `Clase cancelada. Se reembolsaron ${session.bookings.length} créditos.` 
+        shouldRefund,
+        message 
       };
     });
 
     if (transactionResult.session.bookings.length > 0) {
-      const formattedDate = transactionResult.session.startTime.toLocaleDateString();
+      const formattedDate = transactionResult.session.startTime.toLocaleDateString('es-ES', { 
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
+      });
       const className = transactionResult.session.title;
+
+      const notifMessage = transactionResult.shouldRefund
+        ? `El profesor ha cancelado la clase de "${className}" del ${formattedDate}. Se te ha reembolsado el crédito.`
+        : `El profesor ha cancelado el registro de la clase pasada de "${className}" del ${formattedDate}.`;
 
       const promises = transactionResult.session.bookings.map(async (booking) => {
         await this.notifications.create(
           booking.userId,
           'Clase Cancelada',
-          `El profesor ha cancelado la clase de "${className}" del ${formattedDate}. Se te ha reembolsado el crédito.`,
+          notifMessage,
           'WARNING'
         );
 
