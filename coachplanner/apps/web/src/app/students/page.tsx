@@ -41,6 +41,8 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [creditFilter, setCreditFilter] = useState<'ALL' | 'WITH_CREDITS' | 'NO_CREDITS'>('ALL');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
@@ -144,10 +146,12 @@ export default function StudentsPage() {
       const matchesSearch = (s.fullName?.toLowerCase() || '').includes(search.toLowerCase()) ||
                             s.email.toLowerCase().includes(search.toLowerCase()) ||
                             (s.phoneNumber || '').includes(search);
-                            
       if (!matchesSearch) return false;
-      if (statusFilter === 'ACTIVE') return s.status === 'ACTIVE';
-      if (statusFilter === 'INACTIVE') return s.status !== 'ACTIVE';
+      if (statusFilter === 'ACTIVE' && s.status !== 'ACTIVE') return false;
+      if (statusFilter === 'INACTIVE' && s.status === 'ACTIVE') return false;
+      if (categoryFilter !== 'ALL' && s.categoryId?.toString() !== categoryFilter) return false;
+      if (creditFilter === 'WITH_CREDITS' && s.credits <= 0) return false;
+      if (creditFilter === 'NO_CREDITS' && s.credits > 0) return false;
       
       return true;
     });
@@ -172,7 +176,7 @@ export default function StudentsPage() {
         </Button>
       </div>
 
-      <div className="max-w-6xl mx-auto w-full space-y-6">
+      <div className="max-w-6xl mx-auto w-full space-y-4">
           
           <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
               <div className="relative w-full md:w-96">
@@ -204,6 +208,35 @@ export default function StudentsPage() {
                   >
                       Inactivos
                   </button>
+              </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 mb-2">
+              <div className="relative w-full sm:w-64">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select 
+                    className="w-full h-10 rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-sm appearance-none"
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                >
+                    <option value="ALL">Todas las Categorías</option>
+                    {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select 
+                    className="w-full h-10 rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-sm appearance-none"
+                    value={creditFilter}
+                    onChange={(e) => setCreditFilter(e.target.value as 'ALL' | 'WITH_CREDITS' | 'NO_CREDITS')}
+                >
+                    <option value="ALL">Todos los créditos</option>
+                    <option value="WITH_CREDITS">Tienen clases disponibles</option>
+                    <option value="NO_CREDITS">Sin clases (0)</option>
+                </select>
               </div>
           </div>
 
