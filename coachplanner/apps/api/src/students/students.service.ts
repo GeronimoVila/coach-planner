@@ -55,20 +55,51 @@ export class StudentsService {
     const memberships = await this.db.membership.findMany({
       where: { organizationId: orgId, role: Role.STUDENT },
       include: {
-        user: { select: { id: true, fullName: true, email: true, phoneNumber: true } },
-        category: { select: { id: true, name: true } },
-        creditPackages: {
-            where: {
-                remainingAmount: { gt: 0 },
-                expiresAt: { gt: new Date() }
+        user: { 
+          select: { 
+            id: true, fullName: true, email: true, phoneNumber: true,
+            bookings: {
+              where: { classSession: { organizationId: orgId } },
+              orderBy: { createdAt: 'desc' },
+              take: 1
             }
-        }
+          } 
+        },
+        category: { select: { id: true, name: true } },
+        creditPackages: { orderBy: { createdAt: 'desc' } }
       },
       orderBy: { joinedAt: 'desc' },
     });
 
     return memberships.map((m) => {
-      const realCredits = m.creditPackages.reduce((sum, pkg) => sum + pkg.remainingAmount, 0);
+      const realCredits = m.creditPackages
+         .filter(pkg => pkg.remainingAmount > 0 && new Date(pkg.expiresAt) > new Date())
+         .reduce((sum, pkg) => sum + pkg.remainingAmount, 0);
+
+      let currentStatus = m.status;
+
+      if (currentStatus !== 'SUSPENDED') {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        let lastActivityDate = m.joinedAt;
+
+        if (m.creditPackages.length > 0) {
+           const lastPackageDate = new Date(m.creditPackages[0].createdAt);
+           if (lastPackageDate > lastActivityDate) lastActivityDate = lastPackageDate;
+        }
+
+        if (m.user.bookings.length > 0) {
+           const lastBookingDate = new Date(m.user.bookings[0].createdAt);
+           if (lastBookingDate > lastActivityDate) lastActivityDate = lastBookingDate;
+        }
+
+        if (lastActivityDate < thirtyDaysAgo) {
+           currentStatus = 'INACTIVE';
+        } else {
+           currentStatus = 'ACTIVE';
+        }
+      }
 
       return {
         id: m.userId,
@@ -81,6 +112,7 @@ export class StudentsService {
         credits: realCredits,
         categoryName: m.category?.name || 'General',
         categoryId: m.categoryId,
+        status: currentStatus,
       };
     });
   }

@@ -29,6 +29,12 @@ enum PlanType {
   PRO
 }
 
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
 // --- MODELOS ---
 
 model User {
@@ -89,6 +95,7 @@ model Membership {
   role           Role     @default(STUDENT)
   categoryId     Int?     @map("category_id")
   credits        Int      @default(0)
+  status         MembershipStatus @default(ACTIVE)
   joinedAt       DateTime @default(now()) @map("joined_at")
 
   // Relaciones
