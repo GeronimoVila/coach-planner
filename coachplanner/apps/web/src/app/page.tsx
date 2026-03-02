@@ -23,6 +23,7 @@ import {
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useUpgradeModal } from '@/context/upgrade-context';
+import { DynamicLinkIcon } from '@/components/social-icon';
 
 interface DashboardStats {
   role: 'OWNER' | 'STUDENT';
@@ -50,6 +51,7 @@ export default function DashboardPage() {
   
   const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [orgLinks, setOrgLinks] = useState<{id: string, label: string, url: string}[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -65,12 +67,20 @@ export default function DashboardPage() {
   const fetchDashboardStats = async () => {
     setLoadingStats(true);
     try {
-      const res = await api.get('/dashboard/stats');
-      setStats(res.data);
+      const [statsRes, configRes] = await Promise.all([
+         api.get('/dashboard/stats'),
+         api.get('/organizations/config')
+      ]);
 
-      if (res.data.cards?.registerSlug && typeof window !== 'undefined') {
+      setStats(statsRes.data);
+
+      if (configRes.data?.links) {
+          setOrgLinks(configRes.data.links);
+      }
+
+      if (statsRes.data.cards?.registerSlug && typeof window !== 'undefined') {
         const origin = window.location.origin;
-        setInviteLink(`${origin}/register/${res.data.cards.registerSlug}`);
+        setInviteLink(`${origin}/register/${statsRes.data.cards.registerSlug}`);
       }
 
     } catch (error) {
@@ -280,7 +290,6 @@ export default function DashboardPage() {
               </div>
             )}
 
-
             {/* --- VISTA DE ALUMNO --- */}
             {!isOwner && stats?.cards && (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -341,24 +350,33 @@ export default function DashboardPage() {
                     <p className="text-xs text-muted-foreground mt-1">Clases este mes 🔥</p>
                   </CardContent>
                 </Card>
-
-                <Card className="col-span-full lg:col-span-2 bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-                  <CardHeader>
-                    <CardTitle className="text-white text-xl">¿Listo para entrenar?</CardTitle>
-                    <CardDescription className="text-blue-100">
-                      Revisa los horarios disponibles y asegura tu lugar.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                  <Link href="/book">
-                    <Button variant="secondary" className="w-full h-12 text-md font-semibold text-primary hover:bg-white">
-                      📅 Ver Calendario de Clases
-                    </Button>
-                  </Link>
-                </CardContent>
-                </Card>
               </div>
             )}
+            
+              {/* --- SECCIÓN: ENLACES EXTERNOS (Footer Ultra Minimalista) --- */}
+            {orgLinks.length > 0 && (
+                <div className="mt-12 pt-6 pb-2 flex justify-center border-t border-gray-200">
+                  <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-3">
+                    {orgLinks
+                      .filter(link => (link as any).isActive !== false)
+                      .map(link => (
+                      <a 
+                        key={link.id} 
+                        href={link.url.startsWith('http') ? link.url : `https://${link.url}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="group flex items-center gap-1.5 text-gray-500 hover:text-gray-900 transition-colors"
+                      >
+                        <DynamicLinkIcon url={link.url} className="h-4 w-4 opacity-70 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-xs font-medium">
+                            {link.label}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+            )}
+            {/* -------------------------------------------------- */}
           </>
         )}
       </main>

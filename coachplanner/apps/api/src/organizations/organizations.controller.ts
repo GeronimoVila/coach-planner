@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Delete, Param, Request, UseGuards } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { UpdateConfigDto } from './dto/update-config.dto';
 import { CreateOnboardingOrgDto } from './dto/create-onboarding-org.dto';
@@ -18,10 +18,8 @@ export class OrganizationsController {
 
   @Post('onboarding')
   async createOnboarding(@Request() req, @Body() dto: CreateOnboardingOrgDto) {
-    // 1. Crear organización
     const org = await this.organizationsService.createOnboarding(req.user.id, dto);
 
-    // 2. Preparar datos del usuario con los nuevos permisos
     const updatedUser = {
         id: req.user.id,
         email: req.user.email,
@@ -29,11 +27,8 @@ export class OrganizationsController {
         orgId: org.id
     };
 
-    // 3. Generar nuevo token SIN pedir contraseña
-    // USAMOS EL MÉTODO NUEVO AQUÍ 👇
     const tokenResult = await this.authService.signTokenForUser(updatedUser);
 
-    // 4. Devolver token y organización
     return {
         ...tokenResult,
         organization: org
@@ -50,5 +45,23 @@ export class OrganizationsController {
   @Roles(Role.OWNER, Role.ADMIN)
   updateConfig(@Request() req, @Body() updateConfigDto: UpdateConfigDto) {
     return this.organizationsService.updateConfig(req.user.orgId, updateConfigDto);
+  }
+
+  @Post('links')
+  @Roles(Role.OWNER, Role.ADMIN)
+  addLink(@Request() req, @Body() body: { label: string, url: string }) {
+    return this.organizationsService.addLink(req.user.orgId, body.label, body.url);
+  }
+
+  @Delete('links/:id')
+  @Roles(Role.OWNER, Role.ADMIN)
+  removeLink(@Request() req, @Param('id') linkId: string) {
+    return this.organizationsService.removeLink(req.user.orgId, linkId);
+  }
+
+  @Patch('links/:id')
+  @Roles(Role.OWNER, Role.ADMIN)
+  updateLink(@Request() req, @Param('id') linkId: string, @Body() body: { label?: string, url?: string, isActive?: boolean }) {
+    return this.organizationsService.updateLink(req.user.orgId, linkId, body);
   }
 }

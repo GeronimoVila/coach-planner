@@ -11,8 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, User, Lock, Save, CreditCard, Tag, 
-  Building2, Clock, CalendarClock, AlertTriangle
+  Building2, Clock, CalendarClock, AlertTriangle, Plus, Trash2, Link as LinkIcon,
+  Eye, EyeOff, Pencil
 } from 'lucide-react';
+import { DynamicLinkIcon } from '@/components/social-icon';
 
 interface StudentInfo {
   categoryName?: string;
@@ -27,6 +29,13 @@ interface GymConfig {
   slotDurationMinutes: number;
   cancellationWindow: number;
   bookingWindowMinutes: number;
+}
+
+interface OrgLink {
+  id: string;
+  label: string;
+  url: string;
+  isActive: boolean;
 }
 
 export default function SettingsPage() {
@@ -49,6 +58,11 @@ export default function SettingsPage() {
   const [gymData, setGymData] = useState<GymConfig>({
     name: '', openHour: 7, closeHour: 22, slotDurationMinutes: 60, cancellationWindow: 2, bookingWindowMinutes: 15
   });
+
+  const [links, setLinks] = useState<OrgLink[]>([]);
+  const [newLink, setNewLink] = useState({ label: '', url: '' });
+  const [addingLink, setAddingLink] = useState(false);
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -93,6 +107,10 @@ export default function SettingsPage() {
                     cancellationWindow: orgRes.data.cancellationWindow ?? 2,
                     bookingWindowMinutes: orgRes.data.bookingWindowMinutes ?? 15
                 });
+                
+                if (orgRes.data.links) {
+                    setLinks(orgRes.data.links);
+                }
             }
          } catch (err) {}
       }
@@ -138,6 +156,57 @@ export default function SettingsPage() {
       toast.error('Error al guardar configuración');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSaveLink = async () => {
+    if (!newLink.label.trim() || !newLink.url.trim()) return;
+    setAddingLink(true);
+    try {
+      if (editingLinkId) {
+        await api.patch(`/organizations/links/${editingLinkId}`, newLink);
+        toast.success('Enlace actualizado');
+      } else {
+        await api.post('/organizations/links', newLink);
+        toast.success('Enlace agregado correctamente');
+      }
+      setNewLink({ label: '', url: '' });
+      setEditingLinkId(null);
+      fetchData(); 
+    } catch (error) {
+      toast.error('Error al guardar el enlace');
+    } finally {
+      setAddingLink(false);
+    }
+  };
+
+  const handleEditClick = (link: OrgLink) => {
+    setNewLink({ label: link.label, url: link.url });
+    setEditingLinkId(link.id);
+  };
+
+  const handleCancelEdit = () => {
+    setNewLink({ label: '', url: '' });
+    setEditingLinkId(null);
+  };
+
+  const handleToggleLinkStatus = async (link: OrgLink) => {
+    try {
+      await api.patch(`/organizations/links/${link.id}`, { isActive: !link.isActive });
+      toast.success(link.isActive ? 'Enlace ocultado' : 'Enlace activado');
+      fetchData();
+    } catch (error) {
+      toast.error('Error al cambiar el estado');
+    }
+  };
+
+  const handleRemoveLink = async (linkId: string) => {
+    try {
+      await api.delete(`/organizations/links/${linkId}`);
+      toast.success('Enlace eliminado');
+      setLinks(links.filter(l => l.id !== linkId));
+    } catch (error) {
+      toast.error('Error al eliminar el enlace');
     }
   };
 
@@ -335,6 +404,122 @@ export default function SettingsPage() {
                                 </Button>
                             </div>
                         </form>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <LinkIcon className="h-5 w-5 text-blue-600" /> Enlaces Externos
+                        </CardTitle>
+                        <CardDescription>Agrega botones directos a tu grupo de WhatsApp, Instagram o tienda para que los alumnos los vean en su panel.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        
+                        {links.length > 0 ? (
+                            <div className="space-y-2 mb-4">
+                                {links.map(link => (
+                                    <div key={link.id} className={`flex items-center justify-between p-3 border rounded-lg shadow-sm transition-opacity ${!link.isActive ? 'bg-gray-100 opacity-60' : 'bg-white'}`}>
+                                        <div className="flex items-center gap-3 min-w-0 pr-4">
+                                            <div className="p-2 bg-gray-50 rounded-full shrink-0 border">
+                                                <DynamicLinkIcon url={link.url} className={`h-5 w-5 ${!link.isActive ? 'grayscale opacity-50' : ''}`} />
+                                            </div>
+                                            
+                                            <div className="min-w-0">
+                                                <p className="font-medium text-sm text-gray-900 truncate">
+                                                    {link.label} {!link.isActive && <span className="text-xs text-gray-500 font-normal ml-2">(Oculto)</span>}
+                                                </p>
+                                                <a href={link.url.startsWith('http') ? link.url : `https://${link.url}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate block">
+                                                    {link.url}
+                                                </a>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={() => handleToggleLinkStatus(link)} 
+                                                className="text-gray-500 hover:text-gray-900"
+                                                title={link.isActive ? "Ocultar a los alumnos" : "Mostrar a los alumnos"}
+                                            >
+                                                {link.isActive ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                            </Button>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={() => handleEditClick(link)} 
+                                                className="text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                                                title="Editar enlace"
+                                            >
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                onClick={() => handleRemoveLink(link.id)} 
+                                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                title="Eliminar enlace"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-gray-500 text-center py-4 italic border rounded-lg bg-gray-50">
+                                Aún no has agregado ningún enlace.
+                            </p>
+                        )}
+
+                        <div className={`flex flex-col md:flex-row gap-3 items-start md:items-end pt-4 border-t relative ${editingLinkId ? 'bg-blue-50/50 p-4 rounded-lg border-blue-100 mt-2' : 'mt-4'}`}>                          
+                            {editingLinkId && (
+                                <p className="absolute top-1 left-4 text-xs font-medium text-blue-700">
+                                    Editando enlace...
+                                </p>
+                            )}
+                            <div className="space-y-2 w-full md:flex-1">
+                                <Label className="text-xs">Nombre del Botón</Label>
+                                <Input 
+                                    placeholder="Ej: Grupo de WhatsApp" 
+                                    value={newLink.label} 
+                                    onChange={e => setNewLink({...newLink, label: e.target.value})} 
+                                />
+                            </div>
+                            <div className="space-y-2 w-full md:flex-1">
+                                <Label className="text-xs">URL (Enlace)</Label>
+                                <Input 
+                                    placeholder="https://chat.whatsapp.com/..." 
+                                    value={newLink.url} 
+                                    onChange={e => setNewLink({...newLink, url: e.target.value})} 
+                                />
+                            </div>
+                            <div className="w-full md:w-auto flex flex-col sm:flex-row gap-2 shrink-0">
+                                {editingLinkId && (
+                                    <Button 
+                                        onClick={handleCancelEdit} 
+                                        variant="outline"
+                                        className="w-full sm:w-auto h-10 bg-white"
+                                    >
+                                        Cancelar
+                                    </Button>
+                                )}
+                                <Button 
+                                    onClick={handleSaveLink} 
+                                    disabled={addingLink || !newLink.label.trim() || !newLink.url.trim()} 
+                                    className="w-full sm:w-auto h-10 bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                    {addingLink ? (
+                                        <Loader2 className="animate-spin h-4 w-4" />
+                                    ) : (
+                                        editingLinkId ? <Save className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />
+                                    )} 
+                                    {editingLinkId ? 'Guardar' : 'Agregar'}
+                                </Button>
+                            </div>
+                        </div>
+
                     </CardContent>
                 </Card>
             </div>

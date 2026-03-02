@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import { UpdateConfigDto } from './dto/update-config.dto';
 import { CreateOnboardingOrgDto } from './dto/create-onboarding-org.dto';
@@ -48,7 +48,11 @@ export class OrganizationsService {
         openHour: true,
         closeHour: true,
         cancellationWindow: true,
-        bookingWindowMinutes: true
+        bookingWindowMinutes: true,
+        links: {
+            select: { id: true, label: true, url: true, isActive: true },
+            orderBy: { createdAt: 'asc' }
+        }
       }
     });
   }
@@ -57,6 +61,31 @@ export class OrganizationsService {
     return this.db.organization.update({
       where: { id: orgId },
       data: { ...dto },
+    });
+  }
+
+  async addLink(orgId: string, label: string, url: string) {
+    return this.db.organizationLink.create({
+      data: { organizationId: orgId, label, url }
+    });
+  }
+
+  async removeLink(orgId: string, linkId: string) {
+    return this.db.organizationLink.deleteMany({
+      where: { id: linkId, organizationId: orgId }
+    });
+  }
+
+  async updateLink(orgId: string, linkId: string, data: { label?: string, url?: string, isActive?: boolean }) {
+    const link = await this.db.organizationLink.findFirst({
+      where: { id: linkId, organizationId: orgId }
+    });
+
+    if (!link) throw new NotFoundException('El enlace no existe');
+
+    return this.db.organizationLink.update({
+      where: { id: linkId },
+      data
     });
   }
 }
