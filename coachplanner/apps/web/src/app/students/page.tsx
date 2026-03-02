@@ -18,6 +18,7 @@ interface Student {
   membershipId: string;
   fullName: string | null;
   email: string;
+  phoneNumber?: string | null;
   joinedAt: string;
   role: string;
   credits: number;
@@ -139,7 +140,8 @@ export default function StudentsPage() {
   
     const filteredStudents = students.filter(s => 
       (s.fullName?.toLowerCase() || '').includes(search.toLowerCase()) ||
-      s.email.toLowerCase().includes(search.toLowerCase())
+      s.email.toLowerCase().includes(search.toLowerCase()) ||
+      (s.phoneNumber || '').includes(search)
     );
 
   if (authLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
@@ -163,7 +165,7 @@ export default function StudentsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Buscar por nombre o correo..." 
+              placeholder="Buscar por nombre, correo o teléfono" 
               className="pl-10 bg-white"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -173,71 +175,85 @@ export default function StudentsPage() {
         {loading ? (
             <div className="text-center py-12"><Loader2 className="animate-spin mx-auto h-8 w-8 text-primary" /></div>
         ) : (
-             <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-             <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-               <div className="col-span-4">Alumno</div>
-               <div className="col-span-3">Categoría</div>
-               <div className="col-span-2 text-center">Créditos</div>
-               <div className="col-span-2 text-right">Fecha Ingreso</div>
-               <div className="col-span-1 text-center">Acciones</div>
-             </div>
- 
-             <div className="divide-y">
-               {filteredStudents.map((student) => (
-                 <div key={student.membershipId} className="p-4 md:grid md:grid-cols-12 md:gap-4 md:items-center hover:bg-gray-50 transition-colors">
-                   
-                   <div className="col-span-4 flex items-center gap-3 mb-2 md:mb-0">
-                     <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
-                       {student.fullName?.[0]?.toUpperCase() || student.email[0].toUpperCase()}
-                     </div>
-                     <div>
-                       <p className="font-medium text-gray-900">{student.fullName || 'Sin nombre'}</p>
-                       <div className="flex flex-col md:hidden">
-                           <span className="text-xs text-gray-500 mt-0.5">{student.email}</span>
-                       </div>
-                     </div>
-                   </div>
- 
-                   <div className="col-span-3 mb-2 md:mb-0">
-                       <select 
-                           className="w-full md:w-[90%] h-8 rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                           value={student.categoryId || ""}
-                           onChange={(e) => handleCategoryChange(student.id, e.target.value)}
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div className="hidden md:flex items-center justify-between p-4 border-b bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <div className="flex-1 min-w-50">Alumno</div>
+              <div className="w-50">Categoría</div>
+              <div className="w-30 text-center">Créditos</div>
+              <div className="w-37.5 text-right">Fecha Ingreso</div>
+              <div className="w-25 text-right">Acciones</div>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {filteredStudents.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  No se encontraron alumnos con esa búsqueda.
+                </div>
+              ) : (
+                filteredStudents.map((student) => (
+                  <div key={student.membershipId} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-gray-50/50 transition-colors gap-4">
+                    
+                    <div className="flex-1 min-w-50 flex items-center gap-3">
+                      <div className="h-10 w-10 shrink-0 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+                        {student.fullName?.[0]?.toUpperCase() || student.email[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{student.fullName || 'Sin nombre'}</p>
+                        
+                        <div className="flex flex-col md:hidden mt-0.5">
+                            <span className="text-xs text-gray-500 truncate">{student.email}</span>
+                            <span className="text-xs text-gray-500 truncate">{student.phoneNumber || 'Sin teléfono'}</span>
+                        </div>
+                        
+                        <div className="hidden md:flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-gray-500 truncate">{student.email}</span>
+                            <span className="text-xs text-gray-300">•</span>
+                            <span className="text-xs text-gray-500 truncate">{student.phoneNumber || 'Sin teléfono'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="w-full md:w-50 shrink-0">
+                        <select 
+                            className="w-full h-9 rounded-md border border-gray-200 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-sm"
+                            value={student.categoryId || ""}
+                            onChange={(e) => handleCategoryChange(student.id, e.target.value)}
+                        >
+                            <option value="">General (Todas)</option>
+                            {categories.map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="w-full md:w-30 shrink-0 flex items-center justify-start md:justify-center">
+                      <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${student.credits > 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                          {student.credits} Clases
+                      </div>
+                    </div>
+
+                    <div className="hidden md:block w-37.5 shrink-0 text-right text-sm text-gray-500">
+                      {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
+                    </div>
+
+                    <div className="w-full md:w-25 shrink-0 flex justify-end">
+                       <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full md:w-auto md:px-3 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                          onClick={() => openCreditModal(student)}
                        >
-                           <option value="">General (Todas)</option>
-                           {categories.map(cat => (
-                               <option key={cat.id} value={cat.id}>{cat.name}</option>
-                           ))}
-                       </select>
-                   </div>
- 
-                   <div className="col-span-2 flex items-center justify-start md:justify-center mb-2 md:mb-0">
-                     <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${student.credits > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                         {student.credits} Clases
-                     </div>
-                   </div>
- 
-                   <div className="col-span-2 text-right hidden md:block text-sm text-gray-500">
-                     {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
-                   </div>
- 
-                   <div className="col-span-1 flex justify-end md:justify-center mt-2 md:mt-0">
-                      <Button 
-                         size="sm" 
-                         variant="outline" 
-                         className="h-8 w-8 p-0 md:h-9 md:w-auto md:px-3 gap-2"
-                         onClick={() => openCreditModal(student)}
-                         title="Asignar Pack de Clases"
-                      >
-                         <CreditCard className="h-4 w-4" />
-                         <span className="hidden md:inline">Cargar</span>
-                      </Button>
-                   </div>
- 
-                 </div>
-               ))}
-             </div>
-           </div>
+                          <CreditCard className="h-4 w-4" />
+                          <span className="md:hidden">Cargar Créditos</span>
+                          <span className="hidden md:inline">Cargar</span>
+                       </Button>
+                    </div>
+
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         )}
       </div>
 

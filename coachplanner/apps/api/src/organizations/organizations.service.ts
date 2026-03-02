@@ -47,7 +47,8 @@ export class OrganizationsService {
         slotDurationMinutes: true,
         openHour: true,
         closeHour: true,
-        cancellationWindow: true
+        cancellationWindow: true,
+        bookingWindowMinutes: true
       }
     });
   }

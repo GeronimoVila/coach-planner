@@ -30,13 +30,28 @@ export class BookingsService {
 
       const classSession = await tx.classSession.findUnique({
         where: { id: dto.classId },
-        include: { bookings: true },
+        include: { 
+            bookings: true,
+            organization: { select: { bookingWindowMinutes: true } }
+        },
       });
 
       if (!classSession) throw new NotFoundException('La clase no existe');
       
-      if (new Date(classSession.startTime) < new Date()) {
+      const now = new Date();
+      const classStart = new Date(classSession.startTime);
+
+      if (classStart < now) {
          throw new BadRequestException('La clase ya comenzó o finalizó');
+      }
+
+      const diffInMs = classStart.getTime() - now.getTime();
+      const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+
+      if (diffInMinutes < classSession.organization.bookingWindowMinutes) {
+        throw new BadRequestException(
+          `Las inscripciones ya cerraron. Debes reservar con al menos ${classSession.organization.bookingWindowMinutes} minutos de anticipación.`
+        );
       }
 
       if (classSession.categoryId && !membership.categoryId) {

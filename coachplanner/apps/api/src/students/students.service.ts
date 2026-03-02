@@ -55,7 +55,7 @@ export class StudentsService {
     const memberships = await this.db.membership.findMany({
       where: { organizationId: orgId, role: Role.STUDENT },
       include: {
-        user: { select: { id: true, fullName: true, email: true } },
+        user: { select: { id: true, fullName: true, email: true, phoneNumber: true } },
         category: { select: { id: true, name: true } },
         creditPackages: {
             where: {
@@ -75,6 +75,7 @@ export class StudentsService {
         membershipId: m.id,
         fullName: m.user.fullName,
         email: m.user.email,
+        phoneNumber: m.user.phoneNumber,
         joinedAt: m.joinedAt,
         role: m.role,
         credits: realCredits,

@@ -26,6 +26,7 @@ interface GymConfig {
   closeHour: number;
   slotDurationMinutes: number;
   cancellationWindow: number;
+  bookingWindowMinutes: number;
 }
 
 export default function SettingsPage() {
@@ -36,19 +37,17 @@ export default function SettingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'gym'>('profile');
   
-  // Datos del Usuario
   const [userData, setUserData] = useState({
     fullName: '',
     email: '', 
+    phoneNumber: '',
     password: '', 
   });
 
-  // Datos del Alumno
   const [studentInfo, setStudentInfo] = useState<StudentInfo | null>(null);
 
-  // Datos del Gimnasio (Solo Profe)
   const [gymData, setGymData] = useState<GymConfig>({
-    name: '', openHour: 7, closeHour: 22, slotDurationMinutes: 60, cancellationWindow: 2
+    name: '', openHour: 7, closeHour: 22, slotDurationMinutes: 60, cancellationWindow: 2, bookingWindowMinutes: 15
   });
 
   useEffect(() => {
@@ -63,15 +62,14 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Datos de Usuario
       const userRes = await api.get('/users/me');
       setUserData(prev => ({ 
         ...prev, 
         fullName: userRes.data.fullName || '', 
-        email: userRes.data.email 
+        email: userRes.data.email,
+        phoneNumber: userRes.data.phoneNumber || ''
       }));
 
-      // 2. Si es Alumno -> Datos de Membresía
       if (user?.role === 'STUDENT') {
         try {
             const studentRes = await api.get('/students/me');
@@ -83,20 +81,17 @@ export default function SettingsPage() {
         } catch (err) {}
       }
 
-      // 3. Si es Dueño -> Datos de Organización
       if (user?.role === 'OWNER' || user?.role === 'ADMIN') {
          try {
             const orgRes = await api.get('/organizations/config'); 
-            // Asumimos que este endpoint devuelve la info completa o creamos uno nuevo GET /organizations/me
-            // Si /organizations/config solo devuelve config, necesitamos uno que devuelva el nombre también.
-            // Por ahora usaremos el endpoint de config y asumimos que devuelve todo, o lo ajustamos.
             if (orgRes.data) {
                 setGymData({
-                    name: orgRes.data.name || '', // Asegúrate que el backend devuelva name
+                    name: orgRes.data.name || '',
                     openHour: orgRes.data.openHour,
                     closeHour: orgRes.data.closeHour,
                     slotDurationMinutes: orgRes.data.slotDurationMinutes,
-                    cancellationWindow: orgRes.data.cancellationWindow ?? 2
+                    cancellationWindow: orgRes.data.cancellationWindow ?? 2,
+                    bookingWindowMinutes: orgRes.data.bookingWindowMinutes ?? 15
                 });
             }
          } catch (err) {}
@@ -113,7 +108,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const payload: any = { fullName: userData.fullName };
+      const payload: any = { fullName: userData.fullName, phoneNumber: userData.phoneNumber };
       if (userData.password) payload.password = userData.password;
 
       await api.patch('/users/me', payload);
@@ -130,18 +125,13 @@ export default function SettingsPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      // 1. Actualizar Configuración Numérica
       await api.patch('/organizations/config', {
         slotDurationMinutes: Number(gymData.slotDurationMinutes),
         cancellationWindow: Number(gymData.cancellationWindow),
         openHour: Number(gymData.openHour),
-        closeHour: Number(gymData.closeHour)
+        closeHour: Number(gymData.closeHour),
+        bookingWindowMinutes: Number(gymData.bookingWindowMinutes)
       });
-
-      // 2. Actualizar Nombre (Si tienes un endpoint separado, úsalo. Si no, agrégalo a updateConfig o usa updateOrganization)
-      // Como creamos updateConfig solo para números, idealmente tendrías otro para el nombre.
-      // Por simplicidad del MVP, asumiremos que solo se guardan las configs numéricas por ahora
-      // O si quieres guardar el nombre, deberías agregar `name` al DTO `UpdateConfigDto` en el backend.
       
       toast.success('Configuración del gimnasio guardada');
     } catch (error: any) {
@@ -158,8 +148,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50/50 p-4 md:p-8">
       <div className="max-w-3xl mx-auto space-y-6">
-        
-        {/* Header con TABS */}
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
@@ -189,11 +178,9 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* CONTENIDO TAB: PERFIL (Visible para todos o si está activo) */}
         {(activeTab === 'profile') && (
             <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
                 
-                {/* Info Alumno */}
                 {studentInfo && (
                     <div className="grid grid-cols-2 gap-4">
                         <Card>
@@ -233,6 +220,15 @@ export default function SettingsPage() {
                                 <Label>Nombre Completo</Label>
                                 <Input required value={userData.fullName} onChange={e => setUserData({...userData, fullName: e.target.value})} />
                             </div>
+                            <div className="space-y-2">
+                                <Label>Número de Celular</Label>
+                                <Input 
+                                    type="tel"
+                                    value={userData.phoneNumber} 
+                                    onChange={e => setUserData({...userData, phoneNumber: e.target.value})} 
+                                    placeholder="Ej: 11 1234-5678"
+                                />
+                            </div>
                             <div className="pt-4 border-t space-y-2">
                                 <Label>Cambiar Contraseña</Label>
                                 <div className="relative">
@@ -258,13 +254,12 @@ export default function SettingsPage() {
             </div>
         )}
 
-        {/* CONTENIDO TAB: GIMNASIO (Solo Owners) */}
         {(activeTab === 'gym' && isOwner) && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                 <Card>
                     <CardHeader>
                         <CardTitle>Configuración del Negocio</CardTitle>
-                        <CardDescription>Define los horarios y reglas de tu gimnasio</CardDescription>
+                        <CardDescription>Define los horarios y reglas de tu organización</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleUpdateGym} className="space-y-6">
@@ -275,7 +270,7 @@ export default function SettingsPage() {
                                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                     <Input 
                                         value={gymData.name} 
-                                        disabled // Deshabilitado hasta que agregues el endpoint para cambiar nombre
+                                        disabled
                                         title="Contacta a soporte para cambiar el nombre"
                                         className="pl-9 bg-gray-100" 
                                     />
@@ -315,6 +310,23 @@ export default function SettingsPage() {
                                         <Input type="number" min="0" className="pl-9" value={gymData.cancellationWindow} onChange={e => setGymData({...gymData, cancellationWindow: Number(e.target.value)})} />
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Cierre de inscripciones (minutos antes de la clase)</Label>
+                                <div className="relative">
+                                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                    <Input 
+                                        type="number" 
+                                        min="0" 
+                                        className="pl-9" 
+                                        value={gymData.bookingWindowMinutes} 
+                                        onChange={e => setGymData({...gymData, bookingWindowMinutes: Number(e.target.value)})} 
+                                    />
+                                </div>
+                                <p className="text-[11px] text-gray-500">
+                                    Ejemplo: 15 = Los alumnos no podrán anotarse si faltan menos de 15 minutos para que empiece.
+                                </p>
                             </div>
 
                             <div className="flex justify-end pt-2">
