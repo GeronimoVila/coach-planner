@@ -20,7 +20,7 @@ export class BookingsService {
     const bookingResult = await this.db.$transaction(async (tx) => {
       
       await tx.$executeRaw`SELECT * FROM class_sessions WHERE id = ${dto.classId} FOR UPDATE`;
-
+      await tx.$executeRaw`SELECT * FROM memberships WHERE user_id = ${userId} AND organization_id = ${orgId} FOR UPDATE`;
       const membership = await tx.membership.findUnique({
         where: { userId_organizationId: { userId, organizationId: orgId } },
       });
