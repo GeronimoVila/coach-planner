@@ -52,6 +52,12 @@ axiosInstance.interceptors.response.use(
 );
 
 const students = {
+  getMe: async (token?: string) => {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    const { data } = await axiosInstance.get('/students/me', config);
+    return data;
+  },
+    
   getAvailableCategories: async (token?: string) => {
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     const { data } = await axiosInstance.get('/students/me/available-categories', config);
@@ -61,6 +67,12 @@ const students = {
   updateCategory: async (token: string, categoryId: number) => {
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     const { data } = await axiosInstance.patch('/students/me/category', { categoryId }, config);
+    return data;
+  },
+
+  updatePhone: async (token: string, phoneNumber: string) => {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    const { data } = await axiosInstance.patch('/students/me/phone', { phoneNumber }, config);
     return data;
   }
 };

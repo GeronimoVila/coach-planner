@@ -6,6 +6,7 @@ import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { UpdatePhoneDto } from './dto/update-phone.dto';
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('students')
@@ -79,4 +80,17 @@ export class StudentsController {
           select: { id: true, name: true }
       });
   }
+
+  @Patch('me/phone')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STUDENT)
+  async updateMyPhone(@Request() req, @Body() dto: UpdatePhoneDto) {
+    const userId = req.user.id;
+
+    await this.studentsService.updatePhone(userId, dto.phoneNumber);
+    
+    return { 
+      message: 'Teléfono actualizado correctamente' 
+    }
+  };
 }

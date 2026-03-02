@@ -81,7 +81,7 @@ export default function OnboardingCategoryPage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900">¡Registro Completado!</h1>
             <p className="mt-2 text-gray-600">
-              Tu gimnasio no requiere seleccionar una disciplina específica. Ya puedes empezar a reservar tus clases.
+              Ya puedes empezar a reservar tus clases.
             </p>
           </div>
 
@@ -91,7 +91,7 @@ export default function OnboardingCategoryPage() {
             disabled={isSubmitting}
             onClick={handleSubmit}
           >
-            {isSubmitting ? 'Entrando...' : 'Ir a mi Dashboard →'}
+            {isSubmitting ? 'Entrando...' : 'Ir a Inicio →'}
           </Button>
         </div>
       </div>

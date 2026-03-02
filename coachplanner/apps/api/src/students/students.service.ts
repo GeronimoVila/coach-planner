@@ -159,10 +159,16 @@ export class StudentsService {
       throw new ForbiddenException('No eres miembro de este gimnasio.');
     }
 
-    // 3. Actualizamos
     return this.db.membership.update({
       where: { id: membership.id },
       data: { categoryId }
+    });
+  }
+
+  async updatePhone(userId: string, phoneNumber: string) {
+    return this.db.user.update({
+      where: { id: userId },
+      data: { phoneNumber }
     });
   }
 }
