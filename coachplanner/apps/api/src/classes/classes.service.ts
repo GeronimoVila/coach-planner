@@ -6,6 +6,7 @@ import { CloneWeekDto } from './dto/clone-week.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
 import { PlansService } from '../plans/plans.service';
+import { UpdateClassDto } from './dto/update-class.dto';
 
 @Injectable()
 export class ClassesService {
@@ -56,6 +57,64 @@ export class ClassesService {
             })) || []
         }
       },
+    });
+  }
+
+  async update(id: string, updateClassDto: UpdateClassDto, orgId: string) {
+    const classSession = await this.db.classSession.findUnique({
+      where: { id, organizationId: orgId },
+      include: { 
+          bookings: { where: { status: BookingStatus.CONFIRMED } },
+          categories: true
+      }
+    });
+
+    if (!classSession) throw new NotFoundException('Clase no encontrada');
+
+    const hasBookings = classSession.bookings.length > 0;
+
+    if (hasBookings) {
+        if (updateClassDto.startTime || updateClassDto.endTime) {
+            const newStart = updateClassDto.startTime ? new Date(updateClassDto.startTime).getTime() : classSession.startTime.getTime();
+            const newEnd = updateClassDto.endTime ? new Date(updateClassDto.endTime).getTime() : classSession.endTime.getTime();
+            
+            if (newStart !== classSession.startTime.getTime() || newEnd !== classSession.endTime.getTime()) {
+                throw new BadRequestException('No puedes cambiar el horario de una clase que ya tiene alumnos inscritos. Cancélala y crea una nueva.');
+            }
+        }
+
+        if (updateClassDto.capacity !== undefined && updateClassDto.capacity < classSession.bookings.length) {
+            throw new BadRequestException(`No puedes reducir el cupo a menos de ${classSession.bookings.length} (cantidad actual de inscritos)`);
+        }
+
+        if (updateClassDto.categoryIds) {
+            const currentCatIds = classSession.categories.map(c => c.categoryId);
+            const missingCats = currentCatIds.filter(id => !updateClassDto.categoryIds!.includes(id));
+            if (missingCats.length > 0) {
+                throw new BadRequestException('No puedes eliminar disciplinas de esta clase porque ya hay alumnos inscritos. Solo puedes agregar nuevas.');
+            }
+        }
+    }
+
+    const updateData: any = {
+        title: updateClassDto.title,
+        description: updateClassDto.description,
+        capacity: updateClassDto.capacity
+    };
+
+    if (updateClassDto.startTime) updateData.startTime = updateClassDto.startTime;
+    if (updateClassDto.endTime) updateData.endTime = updateClassDto.endTime;
+
+    if (updateClassDto.categoryIds) {
+        updateData.categories = {
+            deleteMany: {},
+            create: updateClassDto.categoryIds.map(catId => ({ categoryId: catId }))
+        };
+    }
+
+    return this.db.classSession.update({
+      where: { id },
+      data: updateData
     });
   }
 

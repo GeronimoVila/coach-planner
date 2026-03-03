@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, ChevronLeft, ChevronRight, X, User, Plus, 
-  Clock, Trash2, Copy, Users
+  Clock, Trash2, Copy, Users, Edit2, AlertCircle
 } from 'lucide-react';
 import useMediaQuery from '@/hooks/use-media-query';
 import { useUpgradeModal } from '@/context/upgrade-context';
@@ -109,6 +109,9 @@ export default function ClassesPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingClassId, setEditingClassId] = useState<string | null>(null);
+  const [hasBookings, setHasBookings] = useState(false);
   const [formData, setFormData] = useState({
     title: '', description: '', start: '', end: '', capacity: 10, categoryIds: [] as number[]
   });
@@ -126,6 +129,7 @@ export default function ClassesPage() {
   }, [user, authLoading, router, weekStart]);
 
   const fetchData = async () => {
+    // ... (Queda exactamente igual)
     const startStr = weekStart.toISOString();
     const endWeek = addDays(weekStart, 7);
     const endStr = endWeek.toISOString();
@@ -195,6 +199,10 @@ export default function ClassesPage() {
     const safeInterval = Math.max(15, intervalMinutes);
     const end = new Date(start.getTime() + safeInterval * 60000);
 
+    setIsEditing(false);
+    setEditingClassId(null);
+    setHasBookings(false);
+
     setFormData({
       title: '', description: '', capacity: 10, categoryIds: [],
       start: formatDateAPI(start),
@@ -203,9 +211,34 @@ export default function ClassesPage() {
     setIsModalOpen(true);
   };
 
+  const handleEditClick = (cls: ClassDetail) => {
+      setIsEditing(true);
+      setEditingClassId(cls.id);
+      
+      const enrolledCount = cls._count?.bookings || cls.bookings?.length || 0;
+      setHasBookings(enrolledCount > 0);
+
+      setFormData({
+          title: cls.title,
+          description: cls.description || '',
+          start: formatDateAPI(new Date(cls.startTime)),
+          end: formatDateAPI(new Date(cls.endTime)),
+          capacity: cls.capacity,
+          categoryIds: cls.categories?.map(c => c.category.id) || []
+      });
+      
+      setViewClass(null);
+      setIsModalOpen(true);
+  };
+
   const handleCheckboxChange = (categoryId: number) => {
     setFormData(prev => {
         const hasId = prev.categoryIds.includes(categoryId);
+        
+        if (hasBookings && hasId) {
+            toast.warning('No puedes quitar disciplinas de una clase con reservas.');
+            return prev;
+        }
         return {
             ...prev,
             categoryIds: hasId 
@@ -240,7 +273,7 @@ export default function ClassesPage() {
     const startDateTime = new Date(formData.start);
     const now = new Date();
 
-    if (startDateTime < now) {
+    if (!isEditing && startDateTime < now) {
       toast.error('No puedes crear una clase en el pasado ⏳');
       return;
     }
@@ -257,9 +290,14 @@ export default function ClassesPage() {
         categoryIds: formData.categoryIds 
       };
 
-      await api.post('/classes', payload);
+      if (isEditing && editingClassId) {
+          await api.patch(`/classes/${editingClassId}`, payload);
+          toast.success('Clase actualizada');
+      } else {
+          await api.post('/classes', payload);
+          toast.success('Clase creada');
+      }
       
-      toast.success('Clase creada');
       setIsModalOpen(false);
       fetchData();
     } catch (error: any) {
@@ -267,7 +305,7 @@ export default function ClassesPage() {
       if (error.response?.data?.message?.includes('Límite de clases')) {
           openUpgradeModal(); 
       } else {
-          toast.error(error.response?.data?.message || 'Error al crear');
+          toast.error(error.response?.data?.message || 'Error al procesar la clase');
       }
     } finally {
       setSubmitting(false);
@@ -276,21 +314,15 @@ export default function ClassesPage() {
 
   const handleCancelClass = async (e: React.MouseEvent, id: string, startTime: string) => {
     e.stopPropagation(); 
-    
     const isPast = new Date(startTime) < new Date();
     const confirmMessage = isPast 
         ? '¿Cancelar esta clase pasada? IMPORTANTE: Al ser del pasado, no se reembolsarán los créditos a los alumnos.'
         : '¿Cancelar esta clase? Se reembolsarán los créditos a todos los inscriptos.';
-
     if (!confirm(confirmMessage)) return;
-    
     try {
       const res = await api.patch(`/classes/${id}/cancel`);
-      
       setClasses(prev => prev.map(c => c.id === id ? { ...c, isCancelled: true } : c));
-      
       if (viewClass?.id === id) setViewClass(null);
-
       toast.success(res.data?.message || 'Clase cancelada con éxito');
     } catch (error: any) { 
         toast.error(error.response?.data?.message || 'Error al cancelar'); 
@@ -299,35 +331,24 @@ export default function ClassesPage() {
 
   const handleCloneWeek = async () => {
     const nextWeekStart = addDays(weekStart, 7);
-    
     const message = `¿Quieres copiar todas las clases de esta semana (${weekStart.toLocaleDateString()}) a la SIGUIENTE semana (${nextWeekStart.toLocaleDateString()})?`;
-    
     if (!confirm(message)) return;
-
     const toastId = toast.loading('Clonando semana...');
-
     try {
       const res = await api.post('/classes/clone-week', {
         sourceWeekStart: weekStart.toISOString(),
         targetWeekStart: nextWeekStart.toISOString()
       });
-
       toast.dismiss(toastId);
-
-      if (res.data.count === 0) {
-         toast.info('No hay clases para clonar en esta semana.');
-      } else {
+      if (res.data.count === 0) toast.info('No hay clases para clonar en esta semana.');
+      else {
          toast.success(`¡Éxito! Se clonaron ${res.data.count} clases.`);
          setWeekStart(nextWeekStart);
       }
-
     } catch (err: any) {
       toast.dismiss(); 
-      if (err.response?.data?.message?.includes('Límite de clases')) {
-          openUpgradeModal();
-      } else {
-          toast.error('Error al intentar clonar la semana');
-      }
+      if (err.response?.data?.message?.includes('Límite de clases')) openUpgradeModal();
+      else toast.error('Error al intentar clonar la semana');
     }
   };
 
@@ -350,7 +371,6 @@ export default function ClassesPage() {
     const safeInterval = Math.max(15, intervalMinutes);
     return classes.find(c => {
       if (c.isCancelled) return false; 
-
       const d = new Date(c.startTime);
       const classTotalMinutes = d.getHours() * 60 + d.getMinutes();
       return d.getDate() === day.getDate() && 
@@ -389,7 +409,6 @@ export default function ClassesPage() {
                     onChange={(e) => handleConfigChange('slotDurationMinutes', Number(e.target.value))}
                   />
               </div>
-
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -441,7 +460,6 @@ export default function ClassesPage() {
               <Clock className="h-3 w-3" /> {formatDuration(intervalMinutes)}
            </div>
         </div>
-
         <div className="flex justify-between items-center px-4 pb-4 overflow-x-auto no-scrollbar">
           {weekDays.map((day, i) => {
             const selected = isSelected(day);
@@ -461,7 +479,6 @@ export default function ClassesPage() {
 
 
       <main className="flex-1 relative bg-gray-50 p-4 overflow-y-auto">
-        
         <div className="hidden md:block bg-white rounded-xl shadow-sm overflow-hidden border">
           <div className="overflow-x-auto">
             <div className="min-w-200">
@@ -538,7 +555,6 @@ export default function ClassesPage() {
           </div>
         </div>
 
-
         <div className="md:hidden space-y-3 pb-24">
           {timeSlots.map((minutes) => {
             const activeClass = getClassInSlot(selectedDate, minutes);
@@ -598,56 +614,78 @@ export default function ClassesPage() {
             );
           })}
         </div>
-
       </main>
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4">
           <Card className="w-full sm:max-w-lg shadow-xl rounded-t-2xl sm:rounded-xl animate-in slide-in-from-bottom-full sm:zoom-in-95 duration-200">
             <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
-              <CardTitle>Nueva Clase</CardTitle>
+              <CardTitle>{isEditing ? 'Editar Clase' : 'Nueva Clase'}</CardTitle>
               <Button variant="ghost" size="icon" onClick={() => setIsModalOpen(false)}>
                 <X className="h-5 w-5" />
               </Button>
             </CardHeader>
             <CardContent className="pt-6 max-h-[80vh] overflow-y-auto">
+              {hasBookings && isEditing && (
+                  <div className="mb-4 bg-orange-50 border border-orange-200 p-3 rounded-lg text-xs text-orange-800 flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <p>
+                          Esta clase ya tiene alumnos inscritos. <strong>No puedes cambiar el horario, ni quitar disciplinas.</strong> Si necesitas modificar eso, cancela la clase y crea una nueva.
+                      </p>
+                  </div>
+              )}
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label>Título</Label>
                   <Input required placeholder="Ej: Crossfit WOD" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} autoFocus />
-                </div>
+                </div>                
                 <div className="grid grid-cols-2 gap-4">
-                  <div><Label>Inicio</Label><Input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} /></div>
-                  <div><Label>Fin</Label><Input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} /></div>
+                  <div className={hasBookings ? 'opacity-60 pointer-events-none' : ''}>
+                      <Label>Inicio</Label>
+                      <Input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} tabIndex={hasBookings ? -1 : 0} />
+                  </div>
+                  <div className={hasBookings ? 'opacity-60 pointer-events-none' : ''}>
+                      <Label>Fin</Label>
+                      <Input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} tabIndex={hasBookings ? -1 : 0} />
+                  </div>
                 </div>
                 
-                <div><Label>Cupo</Label><Input type="number" min="1" value={formData.capacity} onChange={e => setFormData({...formData, capacity: Number(e.target.value)})} /></div>                  
+                <div>
+                    <Label>Cupo Máximo</Label>
+                    <Input type="number" min={hasBookings ? (viewClass?._count?.bookings || 1) : 1} value={formData.capacity} onChange={e => setFormData({...formData, capacity: Number(e.target.value)})} />
+                </div>                  
                 
                 {categories.length > 0 && (
                     <div>
                       <Label className="block mb-2">Disciplinas habilitadas</Label>
                       <div className="grid grid-cols-2 gap-2 border rounded-md p-3 bg-gray-50/50 max-h-36 overflow-y-auto">
-                          {categories.map(c => (
-                              <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                                  <input 
-                                      type="checkbox"
-                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                                      checked={formData.categoryIds.includes(c.id)}
-                                      onChange={() => handleCheckboxChange(c.id)}
-                                  />
-                                  <span className="truncate">{c.name}</span>
-                              </label>
-                          ))}
+                          {categories.map(c => {
+                              const isSelected = formData.categoryIds.includes(c.id);
+                              const isLocked = hasBookings && isSelected;
+
+                              return (
+                                  <label key={c.id} className={`flex items-center gap-2 text-sm cursor-pointer select-none ${isLocked ? 'opacity-60' : ''}`}>
+                                      <input 
+                                          type="checkbox"
+                                          className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                          checked={isSelected}
+                                          onChange={() => {
+                                              if (!isLocked) handleCheckboxChange(c.id);
+                                          }}
+                                          disabled={isLocked}
+                                      />
+                                      <span className="truncate">{c.name}</span>
+                                  </label>
+                              )
+                          })}
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                          Selecciona las disciplinas que pueden reservar esta clase.
-                      </p>
                     </div>
                 )}
 
-                <div><Label>Descripción</Label><Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Detalles..." /></div>
+                <div><Label>Descripción (Opcional)</Label><Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Detalles..." /></div>
+                
                 <Button type="submit" className="w-full" disabled={submitting}>
-                  {submitting ? <Loader2 className="animate-spin mr-2" /> : 'Guardar Clase'}
+                  {submitting ? <Loader2 className="animate-spin mr-2" /> : (isEditing ? 'Guardar Cambios' : 'Crear Clase')}
                 </Button>
               </form>
             </CardContent>
@@ -666,7 +704,18 @@ export default function ClassesPage() {
                     <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">
                       {viewClass.categories?.map(c => c.category.name).join(' • ') || 'GENERAL'}
                     </span>
-                    <CardTitle className="text-2xl">{viewClass.title}</CardTitle>
+                    <CardTitle className="text-2xl flex items-center gap-2">
+                        {viewClass.title}
+                        {!viewClass.isCancelled && (
+                            <button 
+                                onClick={() => handleEditClick(viewClass)}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                title="Editar Clase"
+                            >
+                                <Edit2 className="h-4 w-4" />
+                            </button>
+                        )}
+                    </CardTitle>
                     <p className="text-sm text-gray-500 flex items-center gap-2">
                         <Clock className="h-4 w-4" />
                         {new Date(viewClass.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
