@@ -118,7 +118,7 @@ model Category {
 
   organization   Organization   @relation(fields: [organizationId], references: [id])
   memberships    Membership[]
-  classSessions  ClassSession[]
+  classSessions  ClassCategory[]
 
   @@map("categories")
 }
@@ -147,16 +147,26 @@ model ClassSession {
   endTime        DateTime @map("end_time")
   capacity       Int
   instructorId   String   @map("instructor_id")
-  categoryId     Int?     @map("category_id")
+  categories     ClassCategory[] 
   isCancelled    Boolean  @default(false) @map("is_cancelled")
-
   organization   Organization @relation(fields: [organizationId], references: [id])
   instructor     User         @relation(fields: [instructorId], references: [id])
-  category       Category?    @relation(fields: [categoryId], references: [id]) 
   bookings       Booking[]
 
   @@map("class_sessions")
 }
+
+model ClassCategory {
+  classSessionId String @map("class_session_id")
+  categoryId     Int    @map("category_id")
+
+  classSession   ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+  category       Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([classSessionId, categoryId])
+  @@map("class_category_pivot")
+}
+
 model Booking {
   id              String        @id @default(uuid())
   userId          String        @map("user_id")

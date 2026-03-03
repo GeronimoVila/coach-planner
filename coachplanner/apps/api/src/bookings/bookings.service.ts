@@ -32,6 +32,7 @@ export class BookingsService {
         where: { id: dto.classId },
         include: { 
             bookings: true,
+            categories: true,
             organization: { select: { bookingWindowMinutes: true } }
         },
       });
@@ -54,12 +55,15 @@ export class BookingsService {
         );
       }
 
-      if (classSession.categoryId && !membership.categoryId) {
-        throw new BadRequestException('No tienes una categoría asignada para inscribirte a esta clase.');
-      }
+      const classCategories = classSession.categories.map(c => c.categoryId);
 
-      if (classSession.categoryId && membership.categoryId !== classSession.categoryId) {
-        throw new ConflictException('Esta clase no pertenece a tu categoría.');
+      if (classCategories.length > 0) {
+        if (!membership.categoryId) {
+          throw new BadRequestException('No tienes una categoría asignada para inscribirte a esta clase.');
+        }
+        if (!classCategories.includes(membership.categoryId)) {
+          throw new ConflictException('Esta clase no pertenece a tu disciplina/categoría.');
+        }
       }
 
       const activeBookings = classSession.bookings.filter(b => b.status === BookingStatus.CONFIRMED);

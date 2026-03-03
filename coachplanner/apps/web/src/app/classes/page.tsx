@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, ChevronLeft, ChevronRight, X, User, Plus, 
-  Clock, Trash2, Check, Ban, Copy, Users
+  Clock, Trash2, Copy, Users
 } from 'lucide-react';
 import useMediaQuery from '@/hooks/use-media-query';
 import { useUpgradeModal } from '@/context/upgrade-context';
@@ -29,7 +29,7 @@ interface ClassSession {
   startTime: string;
   endTime: string;
   capacity: number;
-  category: Category | null;
+  categories: { category: Category }[];
   _count?: { bookings: number };
   instructor?: { name: string, avatarUrl?: string }; 
   isCancelled?: boolean;
@@ -110,7 +110,7 @@ export default function ClassesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    title: '', description: '', start: '', end: '', capacity: 10, categoryId: ''
+    title: '', description: '', start: '', end: '', capacity: 10, categoryIds: [] as number[]
   });
 
   const [viewClass, setViewClass] = useState<ClassDetail | null>(null);
@@ -196,11 +196,23 @@ export default function ClassesPage() {
     const end = new Date(start.getTime() + safeInterval * 60000);
 
     setFormData({
-      title: '', description: '', capacity: 10, categoryId: '',
+      title: '', description: '', capacity: 10, categoryIds: [],
       start: formatDateAPI(start),
       end: formatDateAPI(end),
     });
     setIsModalOpen(true);
+  };
+
+  const handleCheckboxChange = (categoryId: number) => {
+    setFormData(prev => {
+        const hasId = prev.categoryIds.includes(categoryId);
+        return {
+            ...prev,
+            categoryIds: hasId 
+                ? prev.categoryIds.filter(id => id !== categoryId)
+                : [...prev.categoryIds, categoryId]
+        };
+    });
   };
 
   const handleViewClass = async (e: React.MouseEvent, classId: string) => {
@@ -242,7 +254,7 @@ export default function ClassesPage() {
         startTime: new Date(formData.start).toISOString(),
         endTime: new Date(formData.end).toISOString(),
         capacity: Number(formData.capacity),
-        categoryId: formData.categoryId ? Number(formData.categoryId) : null 
+        categoryIds: formData.categoryIds 
       };
 
       await api.post('/classes', payload);
@@ -252,7 +264,6 @@ export default function ClassesPage() {
       fetchData();
     } catch (error: any) {
       toast.dismiss();
-
       if (error.response?.data?.message?.includes('Límite de clases')) {
           openUpgradeModal(); 
       } else {
@@ -312,7 +323,6 @@ export default function ClassesPage() {
 
     } catch (err: any) {
       toast.dismiss(); 
-
       if (err.response?.data?.message?.includes('Límite de clases')) {
           openUpgradeModal();
       } else {
@@ -475,7 +485,9 @@ export default function ClassesPage() {
                     </div>
                     {weekDays.map((day, i) => {
                       const activeClass = getClassInSlot(day, minutes);
-                      const categoryStyle = activeClass ? getCategoryStyles(activeClass.category?.id, activeClass.isCancelled) : '';
+                      const firstCategoryId = activeClass?.categories?.[0]?.category?.id;
+                      const categoryStyle = activeClass ? getCategoryStyles(firstCategoryId, activeClass.isCancelled) : '';
+                      const categoryNames = activeClass?.categories?.map(c => c.category.name).join(', ') || 'General';
 
                       return (
                         <div 
@@ -501,7 +513,7 @@ export default function ClassesPage() {
 
                               <div>
                                 <h3 className="font-bold text-sm truncate pr-4">{activeClass.title}</h3>
-                                <p className="text-[11px] opacity-80 truncate">{activeClass.category?.name || 'General'}</p>
+                                <p className="text-[11px] opacity-80 truncate" title={categoryNames}>{categoryNames}</p>
                               </div>
                               <div className="flex justify-between items-end mt-2">
                                 <div className="flex items-center text-xs font-medium gap-1">
@@ -530,9 +542,9 @@ export default function ClassesPage() {
         <div className="md:hidden space-y-3 pb-24">
           {timeSlots.map((minutes) => {
             const activeClass = getClassInSlot(selectedDate, minutes);
-            const categoryStyle = activeClass 
-              ? getCategoryStyles(activeClass.category?.id, activeClass.isCancelled)
-              : '';
+            const firstCategoryId = activeClass?.categories?.[0]?.category?.id;
+            const categoryStyle = activeClass ? getCategoryStyles(firstCategoryId, activeClass.isCancelled) : '';
+            const categoryNames = activeClass?.categories?.map(c => c.category.name).join(', ') || 'General';
 
             return (
               <div key={minutes} className="flex gap-3 group">
@@ -548,7 +560,7 @@ export default function ClassesPage() {
                       <div className="flex justify-between items-start">
                         <div className="overflow-hidden">
                           <h3 className="font-bold text-base truncate">{activeClass.title}</h3>
-                          <p className="text-xs opacity-80 font-medium">{activeClass.category?.name || 'General'}</p>
+                          <p className="text-xs opacity-80 font-medium truncate">{categoryNames}</p>
                         </div>
                         
                         {!activeClass.isCancelled && (
@@ -608,23 +620,31 @@ export default function ClassesPage() {
                   <div><Label>Inicio</Label><Input type="datetime-local" required value={formData.start} onChange={e => setFormData({...formData, start: e.target.value})} /></div>
                   <div><Label>Fin</Label><Input type="datetime-local" required value={formData.end} onChange={e => setFormData({...formData, end: e.target.value})} /></div>
                 </div>
-                <div className={`grid ${categories.length > 0 ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
-                  <div><Label>Cupo</Label><Input type="number" min="1" value={formData.capacity} onChange={e => setFormData({...formData, capacity: Number(e.target.value)})} /></div>                  
-                  {categories.length > 0 && (
-                      <div>
-                        <Label>Categoría</Label>
-                        <select 
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" 
-                            required
-                            value={formData.categoryId} 
-                            onChange={e => setFormData({...formData, categoryId: e.target.value})}
-                        >
-                          <option value="">Seleccionar...</option>
-                          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                
+                <div><Label>Cupo</Label><Input type="number" min="1" value={formData.capacity} onChange={e => setFormData({...formData, capacity: Number(e.target.value)})} /></div>                  
+                
+                {categories.length > 0 && (
+                    <div>
+                      <Label className="block mb-2">Disciplinas habilitadas</Label>
+                      <div className="grid grid-cols-2 gap-2 border rounded-md p-3 bg-gray-50/50 max-h-36 overflow-y-auto">
+                          {categories.map(c => (
+                              <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                                  <input 
+                                      type="checkbox"
+                                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                                      checked={formData.categoryIds.includes(c.id)}
+                                      onChange={() => handleCheckboxChange(c.id)}
+                                  />
+                                  <span className="truncate">{c.name}</span>
+                              </label>
+                          ))}
                       </div>
-                  )}
-                </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                          Selecciona las disciplinas que pueden reservar esta clase.
+                      </p>
+                    </div>
+                )}
+
                 <div><Label>Descripción</Label><Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Detalles..." /></div>
                 <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? <Loader2 className="animate-spin mr-2" /> : 'Guardar Clase'}
@@ -644,7 +664,7 @@ export default function ClassesPage() {
                 </Button>
                 <div className="flex flex-col gap-1">
                     <span className="text-xs font-bold uppercase text-gray-500 tracking-wider">
-                      {viewClass.category?.name || 'GENERAL'}
+                      {viewClass.categories?.map(c => c.category.name).join(' • ') || 'GENERAL'}
                     </span>
                     <CardTitle className="text-2xl">{viewClass.title}</CardTitle>
                     <p className="text-sm text-gray-500 flex items-center gap-2">
