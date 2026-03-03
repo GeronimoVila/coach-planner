@@ -18,7 +18,8 @@ import {
   Flame,
   AlertTriangle,
   Clock,
-  Crown
+  Crown,
+  Tag
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -28,10 +29,15 @@ import { DynamicLinkIcon } from '@/components/social-icon';
 interface DashboardStats {
   role: 'OWNER' | 'STUDENT';
   cards: {
+    totalRegistered?: number;
     activeStudents?: number;
+    categoriesStats?: { name: string; count: number }[];
     maxStudents?: number;
     isPro?: boolean;
     classesToday?: number;
+    totalCapacity?: number;
+    totalBooked?: number;
+    occupancyRate?: number;
     expiringPacks?: number;
     registerSlug?: string;
     credits?: number;
@@ -160,7 +166,9 @@ export default function DashboardPage() {
             {isOwner && stats?.cards && (
               <div className="space-y-6">
                 
-                <div className="grid gap-6 md:grid-cols-3">
+                {/* GRILLA OPTIMIZADA: 1 col en móvil, 2 en tablet, 4 en PC */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                    
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                           <CardTitle className="text-sm font-medium">Cupo de Alumnos</CardTitle>
@@ -174,11 +182,11 @@ export default function DashboardPage() {
                                    / {stats.cards.isPro ? '∞' : stats.cards.maxStudents}
                                 </span>
                              </div>
-                             {isNearLimit && <span className="text-xs font-bold text-orange-600 mb-1">¡Sin cupos disponibles!</span>}
+                             {isNearLimit && <span className="text-xs font-bold text-orange-600 mb-1">¡Casi lleno!</span>}
                           </div>
                           
                           {!stats.cards.isPro && (
-                              <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden mb-3">
                                 <div 
                                     className={`h-full rounded-full ${isNearLimit ? 'bg-orange-500' : 'bg-blue-600'}`} 
                                     style={{ width: `${percentage}%` }}
@@ -186,23 +194,24 @@ export default function DashboardPage() {
                               </div>
                           )}
                           {stats.cards.isPro && (
-                              <p className="text-xs text-indigo-600 font-medium">Sin límites de registro</p>
+                              <p className="text-xs text-indigo-600 font-medium mb-3">
+                                  {stats.cards.totalRegistered} registrados en total
+                              </p>
                           )}
 
-                          <div className="mt-4 space-y-2">
+                          <div className="flex flex-col gap-2 mt-2">
                             {isNearLimit && (
                                 <Button 
                                     size="sm" 
-                                    className="w-full h-8 text-xs bg-linear-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white border-0 animate-pulse"
+                                    className="w-full h-8 text-xs bg-linear-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white border-0"
                                     onClick={openUpgradeModal}
                                 >
-                                    <Crown className="h-3 w-3 mr-2" />
+                                    <Crown className="h-3 w-3 mr-1" />
                                     Aumentar Cupo
                                 </Button>
                             )}
-
-                            <Link href="/students" className="block">
-                                <Button size="sm" variant="outline" className="w-full h-8 text-xs">Administrar alumnos</Button>
+                            <Link href="/students" className="block w-full">
+                                <Button size="sm" variant="outline" className="w-full h-8 text-xs">Administrar</Button>
                             </Link>
                           </div>
                       </CardContent>
@@ -213,10 +222,12 @@ export default function DashboardPage() {
                           <CardTitle className="text-sm font-medium">Clases Hoy</CardTitle>
                           <LayoutDashboard className="h-4 w-4 text-orange-500" />
                       </CardHeader>
-                      <CardContent>
-                          <div className="text-2xl font-bold">{stats.cards.classesToday}</div>
-                          <p className="text-xs text-muted-foreground mb-4">Sesiones programadas</p>
-                          <Link href="/classes">
+                      <CardContent className="flex flex-col justify-between h-[calc(100%-2.5rem)]">
+                          <div>
+                              <div className="text-2xl font-bold">{stats.cards.classesToday}</div>
+                              <p className="text-xs text-muted-foreground mb-4">Sesiones programadas</p>
+                          </div>
+                          <Link href="/classes" className="mt-auto block w-full">
                              <Button size="sm" variant="outline" className="w-full h-8 text-xs">Ver Calendario</Button>
                           </Link>
                       </CardContent>
@@ -224,19 +235,45 @@ export default function DashboardPage() {
 
                     <Card className={stats.cards.expiringPacks! > 0 ? "border-red-200 bg-red-50/30" : ""}>
                       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                          <CardTitle className="text-sm font-medium text-red-700">Packs por Vencer</CardTitle>
-                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                          <CardTitle className={`text-sm font-medium ${stats.cards.expiringPacks! > 0 ? 'text-red-700' : ''}`}>Packs por Vencer</CardTitle>
+                          <AlertTriangle className={`h-4 w-4 ${stats.cards.expiringPacks! > 0 ? 'text-red-500' : 'text-gray-400'}`} />
                       </CardHeader>
-                      <CardContent>
-                          <div className="text-2xl font-bold text-red-700">{stats.cards.expiringPacks}</div>
-                          <p className="text-xs text-red-600/80 mb-4">Vencen en próximos 7 días</p>
+                      <CardContent className="flex flex-col justify-between h-[calc(100%-2.5rem)]">
+                          <div>
+                              <div className={`text-2xl font-bold ${stats.cards.expiringPacks! > 0 ? 'text-red-700' : ''}`}>{stats.cards.expiringPacks}</div>
+                              <p className={`text-xs mb-4 ${stats.cards.expiringPacks! > 0 ? 'text-red-600/80' : 'text-muted-foreground'}`}>Vencen en próximos 7 días</p>
+                          </div>
                           {stats.cards.expiringPacks! > 0 && (
-                             <Button size="sm" variant="ghost" className="w-full h-8 text-xs text-red-600 hover:bg-red-100 hover:text-red-700">
-                               Revisar Alumnos
-                             </Button>
+                             <Link href="/students" className="mt-auto block w-full">
+                                 <Button size="sm" variant="ghost" className="w-full h-8 text-xs text-red-600 hover:bg-red-100 hover:text-red-700">
+                                   Revisar Alumnos
+                                 </Button>
+                             </Link>
                           )}
                       </CardContent>
                     </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-sm font-medium">Disciplinas (Activos)</CardTitle>
+                          <Tag className="h-4 w-4 text-purple-500" />
+                      </CardHeader>
+                      <CardContent>
+                          <div className="space-y-2.5 mt-1 overflow-y-auto max-h-27.5 pr-1 custom-scrollbar">
+                              {stats.cards.categoriesStats && stats.cards.categoriesStats.length > 0 ? (
+                                  stats.cards.categoriesStats.map((cat, index) => (
+                                      <div key={index} className="flex items-center justify-between text-xs">
+                                          <span className="text-gray-600 truncate mr-2">{cat.name}</span>
+                                          <span className="font-semibold bg-gray-100 px-1.5 py-0.5 rounded text-gray-900">{cat.count}</span>
+                                      </div>
+                                  ))
+                              ) : (
+                                  <p className="text-xs text-gray-400 italic">No hay datos aún.</p>
+                              )}
+                          </div>
+                      </CardContent>
+                    </Card>
+
                 </div>
 
                 {inviteLink && (
@@ -270,23 +307,6 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
                 )}
-
-                <div className="grid md:grid-cols-2 gap-6">
-                      <Card className="bg-linear-to-br from-gray-900 to-gray-800 text-white">
-                        <CardHeader>
-                            <CardTitle>Gestión Rápida</CardTitle>
-                            <CardDescription className="text-gray-300">Accesos directos más usados</CardDescription>
-                        </CardHeader>
-                        <CardContent className="grid grid-cols-2 gap-3">
-                            <Link href="/classes">
-                               <Button variant="secondary" className="w-full h-12">📅 Calendario</Button>
-                            </Link>
-                            <Link href="/students">
-                               <Button variant="secondary" className="w-full h-12">👥 Cargar Créditos</Button>
-                            </Link>
-                        </CardContent>
-                      </Card>
-                </div>
               </div>
             )}
 
@@ -353,7 +373,6 @@ export default function DashboardPage() {
               </div>
             )}
             
-              {/* --- SECCIÓN: ENLACES EXTERNOS (Footer Ultra Minimalista) --- */}
             {orgLinks.length > 0 && (
                 <div className="mt-12 pt-6 pb-2 flex justify-center border-t border-gray-200">
                   <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-3">
@@ -376,7 +395,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
             )}
-            {/* -------------------------------------------------- */}
           </>
         )}
       </main>
