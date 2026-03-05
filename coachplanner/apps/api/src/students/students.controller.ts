@@ -18,6 +18,9 @@ export class StudentsController {
   getMe(@Request() req) {
     const userId = req.user.id || req.user.userId;
     const orgId = req.user.orgId || req.user.organizationId;
+    if (!orgId) {
+       throw new BadRequestException('El usuario no está asociado a ninguna organización en la sesión actual');
+    }
     
     return this.studentsService.findMe(userId, orgId);
   }

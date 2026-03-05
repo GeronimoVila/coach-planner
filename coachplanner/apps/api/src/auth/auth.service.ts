@@ -300,6 +300,7 @@ export class AuthService {
                 data: {
                     email: dto.email,
                     fullName: dto.name, 
+                    phoneNumber: dto.phoneNumber,
                     passwordHash: hashedPassword,
                     verificationToken: verificationToken,
                     emailVerified: null
@@ -415,32 +416,99 @@ export class AuthService {
     };
   }
 
-  private generateJwt(user: any) {
+  async getMyGyms(userId: string) {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      include: {
+        memberships: {
+          include: {
+            organization: { select: { id: true, name: true, slug: true } }
+          }
+        },
+        organizationsOwned: { select: { id: true, name: true, slug: true } }
+      }
+    });
+
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    const gyms: any[] = [];
+
+    user.organizationsOwned?.forEach(org => {
+        gyms.push({ id: org.id, name: org.name, slug: org.slug, role: Role.OWNER });
+    });
+
+    user.memberships?.forEach(m => {
+        if (!gyms.find(g => g.id === m.organization.id)) {
+            gyms.push({ id: m.organization.id, name: m.organization.name, slug: m.organization.slug, role: m.role });
+        }
+    });
+
+    return gyms;
+  }
+
+  async switchGym(userId: string, targetOrgId: string) {
+      const user = await this.db.user.findUnique({
+          where: { id: userId },
+          include: { memberships: true, organizationsOwned: true }
+      });
+
+      if (!user) throw new NotFoundException('Usuario no encontrado');
+
+      const hasAccess = user.memberships.some(m => m.organizationId === targetOrgId) || 
+                        user.organizationsOwned.some(o => o.id === targetOrgId);
+
+      if (!hasAccess && user.role !== Role.ADMIN) {
+          throw new UnauthorizedException('No tienes acceso a este gimnasio');
+      }
+
+      return this.generateJwt(user, targetOrgId);
+  }
+
+  private generateJwt(user: any, targetOrgId?: string) {
     let primaryRole: Role = Role.STUDENT; 
     let orgId: string | null = null; 
     let categoryId: number | null = null;
     let plan: string = 'FREE'; 
 
-    if (user.role === Role.ADMIN) {
-        primaryRole = Role.ADMIN;
-        if (user.organizationsOwned && user.organizationsOwned.length > 0) {
-            orgId = user.organizationsOwned[0].id;
-            plan = user.organizationsOwned[0].plan || 'FREE';
+    if (targetOrgId) {
+        const ownedOrg = user.organizationsOwned?.find((o: any) => o.id === targetOrgId);
+        const membership = user.memberships?.find((m: any) => m.organizationId === targetOrgId);
+
+        if (user.role === Role.ADMIN) {
+            primaryRole = Role.ADMIN;
+            orgId = targetOrgId;
+        } else if (ownedOrg) {
+            primaryRole = Role.OWNER;
+            orgId = ownedOrg.id;
+            plan = ownedOrg.plan || 'FREE';
+            if (!ownedOrg.isActive) throw new UnauthorizedException('Tu gimnasio ha sido suspendido.');
+        } else if (membership) {
+            primaryRole = membership.role;
+            orgId = membership.organizationId;
+            categoryId = membership.categoryId;
         }
-    } 
-    else if (user.organizationsOwned && user.organizationsOwned.length > 0) {
-      primaryRole = Role.OWNER;
-      orgId = user.organizationsOwned[0].id;
-      plan = user.organizationsOwned[0].plan || 'FREE';
-      
-      const ownedOrg = user.organizationsOwned[0];
-      if (ownedOrg && !ownedOrg.isActive) {
-        throw new UnauthorizedException('Tu gimnasio ha sido suspendido. Contacta a soporte.');
-      }
-    } else if (user.memberships && user.memberships.length > 0) {
-      primaryRole = user.memberships[0].role;
-      orgId = user.memberships[0].organizationId;
-      categoryId = user.memberships[0].categoryId;
+    } else {
+        if (user.role === Role.ADMIN) {
+            primaryRole = Role.ADMIN;
+            if (user.organizationsOwned && user.organizationsOwned.length > 0) {
+                orgId = user.organizationsOwned[0].id;
+                plan = user.organizationsOwned[0].plan || 'FREE';
+            }
+        } 
+        else if (user.organizationsOwned && user.organizationsOwned.length > 0) {
+          primaryRole = Role.OWNER;
+          orgId = user.organizationsOwned[0].id;
+          plan = user.organizationsOwned[0].plan || 'FREE';
+          
+          const ownedOrg = user.organizationsOwned[0];
+          if (ownedOrg && !ownedOrg.isActive) {
+            throw new UnauthorizedException('Tu gimnasio ha sido suspendido. Contacta a soporte.');
+          }
+        } else if (user.memberships && user.memberships.length > 0) {
+          primaryRole = user.memberships[0].role;
+          orgId = user.memberships[0].organizationId;
+          categoryId = user.memberships[0].categoryId;
+        }
     }
 
     const payload = { 
@@ -451,7 +519,8 @@ export class AuthService {
       categoryId: categoryId,
       plan: plan,
       fullName: user.fullName,
-      avatarUrl: user.avatarUrl
+      avatarUrl: user.avatarUrl,
+      phoneNumber: user.phoneNumber
     };
     
     return {
@@ -461,6 +530,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        phoneNumber: user.phoneNumber,
         role: primaryRole,
         organizationId: orgId,
         categoryId: categoryId,

@@ -15,15 +15,20 @@ export default function StudentGuard({ children }: { children: React.ReactNode }
     if (isLoading) return;
 
     const verifyStudentStatus = async () => {
+
+      const isPublicOrOnboarding = pathname.startsWith('/login') || pathname.startsWith('/onboarding');
+
       if (
         user && 
         user.role === 'STUDENT' && 
         user.organizationId && 
-        !user.categoryId && 
-        pathname !== '/onboarding/category'
+        user.categoryId === null &&
+        !isPublicOrOnboarding
       ) {
         try {
-          const categories = await api.students.getAvailableCategories(token!);
+          const categories = await api.get('/categories', {
+              headers: { Authorization: `Bearer ${token}` }
+          }).then(res => res.data);
           
           if (categories && categories.length > 0) {
             router.replace('/onboarding/category');
@@ -32,7 +37,7 @@ export default function StudentGuard({ children }: { children: React.ReactNode }
             setIsChecking(false);
           }
         } catch (error) {
-          console.error("Error verificando categorías:", error);
+          console.error("Error verificando categorías en guard:", error);
           setIsChecking(false); 
         }
       } else {

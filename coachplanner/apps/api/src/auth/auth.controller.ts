@@ -129,6 +129,19 @@ export class AuthController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Get('my-gyms')
+  async getMyGyms(@Request() req) {
+    return this.authService.getMyGyms(req.user.id);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('switch-gym')
+  async switchGym(@Request() req, @Body('targetOrgId') targetOrgId: string) {
+    if (!targetOrgId) throw new BadRequestException('Falta el ID de la organización destino');
+    return this.authService.switchGym(req.user.id, targetOrgId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Get('refresh')
   async refreshSession(@Request() req) {
     return this.authService.refreshToken(req.user.id);

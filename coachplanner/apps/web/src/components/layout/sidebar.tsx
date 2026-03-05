@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
@@ -12,15 +12,47 @@ import {
   Dumbbell, 
   Menu, 
   X,
-  Crown
+  Crown,
+  Building2,
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 import { useUpgradeModal } from '@/context/upgrade-context';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
 
 export default function Sidebar() {
-  const { user, logout } = useAuth();
+  const { user, logout, switchOrganization } = useAuth();
   const { openUpgradeModal } = useUpgradeModal();
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [gyms, setGyms] = useState<any[]>([]);
+  const [isSwitching, setIsSwitching] = useState(false);
+
+  useEffect(() => {
+    if (user && user.role === 'STUDENT') {
+      api.get('/auth/my-gyms')
+         .then(res => setGyms(res.data))
+         .catch(err => console.error("Error al cargar gimnasios en sidebar", err));
+    }
+  }, [user]);
+
+  const handleSwitchGym = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const targetOrgId = e.target.value;
+    if (targetOrgId === user?.organizationId) return;
+
+    setIsSwitching(true);
+    const toastId = toast.loading('Cambiando de gimnasio...');
+
+    try {
+      const res = await api.post('/auth/switch-gym', { targetOrgId });
+      toast.success('¡Listo!', { id: toastId });
+      switchOrganization(res.data.access_token);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al cambiar', { id: toastId });
+      setIsSwitching(false);
+    }
+  };
 
   if (!user) return null;
 
@@ -61,6 +93,29 @@ export default function Sidebar() {
           </div>
 
           <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
+            {user.role === 'STUDENT' && gyms.length > 0 && (
+                <div className="md:hidden px-3 mb-6">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Mi Gimnasio</p>
+                    <div className={`relative flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 ${isSwitching ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <Building2 className="h-4 w-4 text-blue-600 mr-2 shrink-0" />
+                        <select
+                            value={user.organizationId || ''}
+                            onChange={handleSwitchGym}
+                            disabled={isSwitching}
+                            className="appearance-none bg-transparent border-none text-sm font-bold text-gray-800 pr-6 cursor-pointer focus:outline-none w-full truncate"
+                        >
+                            {gyms.map(g => (
+                                <option key={g.id} value={g.id}>{g.name}</option>
+                            ))}
+                        </select>
+                        {isSwitching ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-blue-500 absolute right-3 pointer-events-none" />
+                        ) : (
+                            <ChevronDown className="h-4 w-4 text-gray-400 absolute right-3 pointer-events-none" />
+                        )}
+                    </div>
+                </div>
+            )}
             <div className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
               {user.role === 'ADMIN' ? 'Administración' : 'Menú Principal'}
             </div>

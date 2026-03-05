@@ -13,6 +13,7 @@ interface JwtPayload {
   plan?: string;
   fullName?: string;
   avatarUrl?: string;
+  phoneNumber?: string;
   exp?: number;
 }
 
@@ -25,6 +26,7 @@ export interface User {
   plan?: string;
   fullName?: string;
   avatarUrl?: string;
+  phoneNumber?: string | null;
 }
 
 interface AuthContextType {
@@ -33,6 +35,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (token: string, user: User) => void;
   loginWithToken: (token: string) => void;
+  switchOrganization: (newToken: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -88,7 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         categoryId: decoded.categoryId ?? null,
         plan: decoded.plan || 'FREE',
         fullName: decoded.fullName || '',
-        avatarUrl: decoded.avatarUrl || ''
+        avatarUrl: decoded.avatarUrl || '',
+        phoneNumber: decoded.phoneNumber || null
       };
 
       login(newToken, userData);
@@ -97,6 +101,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("❌ AuthContext: Error crítico al leer el token:", error);
     }
   }, [login]);
+
+  const switchOrganization = useCallback((newToken: string) => {
+    try {
+      const decoded = jwtDecode<JwtPayload>(newToken);
+
+      const userData: User = {
+        id: decoded.sub, 
+        email: decoded.email,
+        role: decoded.role || 'STUDENT',
+        organizationId: decoded.orgId || null,
+        categoryId: decoded.categoryId ?? null,
+        plan: decoded.plan || 'FREE',
+        fullName: decoded.fullName || '',
+        avatarUrl: decoded.avatarUrl || '',
+        phoneNumber: decoded.phoneNumber || null
+      };
+
+      setToken(newToken);
+      setUser(userData);
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('user', JSON.stringify(userData));
+      setCookie('token', newToken, 7);
+      setCookie('role', userData.role, 7);
+
+      window.location.href = '/';
+      
+    } catch (error) {
+      console.error("❌ AuthContext: Error al cambiar de organización:", error);
+    }
+  }, []);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
@@ -117,7 +151,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider 
-      value={{ user, token, isLoading, login, loginWithToken, logout, isAuthenticated: !!user }}
+      value={{ 
+        user, 
+        token, 
+        isLoading, 
+        login, 
+        loginWithToken, 
+        switchOrganization,
+        logout, 
+        isAuthenticated: !!user 
+      }}
     >
       {children}
     </AuthContext.Provider>

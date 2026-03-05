@@ -38,8 +38,10 @@ function CallbackContent() {
           throw new Error("Datos de sesión inválidos");
         }
 
-        const user = sessionData.user;
-        login(sessionData.access_token, user);
+        let currentToken = sessionData.access_token;
+        let currentUser = sessionData.user;
+
+        login(currentToken, currentUser);
 
         if (intent?.type === 'REGISTER_OWNER') {
           toast.success('¡Autenticación exitosa!');
@@ -50,28 +52,36 @@ function CallbackContent() {
         if (intent?.type === 'JOIN_GYM' && intent?.slug) {
           try {
             await api.post('/auth/join', { slug: intent.slug }, {
-              headers: { Authorization: `Bearer ${token}` }
+              headers: { Authorization: `Bearer ${currentToken}` }
             });
             toast.success('¡Te has unido al gimnasio!', {
               description: 'Configurando tu perfil...'
             });
+
+            const refreshed = await api.auth.refreshSession(currentToken);
+            currentToken = refreshed.access_token;
+            currentUser = refreshed.user;
+            login(currentToken, currentUser);
+
           } catch (error) {
             console.error("Error uniéndose al gym:", error);
           }
         }
 
-        if (user.role === 'STUDENT') {
+        if (currentUser.role === 'STUDENT') {
             
-          if (!user.phoneNumber) {
+          if (!currentUser.phoneNumber) {
             router.push('/onboarding/phone');
             return; 
           }
 
           try {
-            const myStudentData = await api.students.getMe(token);
-            if (myStudentData.categoryId === null) {
-              router.push('/onboarding/category');
-              return;
+            if (currentUser.organizationId) {
+                const myStudentData = await api.students.getMe(currentToken);
+                if (myStudentData.categoryId === null) {
+                  router.push('/onboarding/category');
+                  return;
+                }
             }
           } catch (err) {
             console.error("Error validando categoría:", err);
