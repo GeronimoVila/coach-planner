@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, ChevronLeft, ChevronRight, X, User, Plus, 
-  Clock, Trash2, Copy, Users, Edit2, AlertCircle
+  Clock, Trash2, Copy, Users, Edit2, AlertCircle, Tag
 } from 'lucide-react';
 import useMediaQuery from '@/hooks/use-media-query';
 import { useUpgradeModal } from '@/context/upgrade-context';
@@ -38,7 +38,13 @@ interface ClassSession {
 interface ClassDetail extends ClassSession {
     bookings: {
         id: string;
-        user: { fullName: string; email: string };
+        user: { 
+          fullName: string; 
+          email: string;
+          memberships?: {
+            category?: Category;
+          }[];
+        };
     }[];
 }
 
@@ -129,7 +135,6 @@ export default function ClassesPage() {
   }, [user, authLoading, router, weekStart]);
 
   const fetchData = async () => {
-    // ... (Queda exactamente igual)
     const startStr = weekStart.toISOString();
     const endWeek = addDays(weekStart, 7);
     const endStr = endWeek.toISOString();
@@ -738,17 +743,27 @@ export default function ClassesPage() {
                     ) : (
                         <div className="space-y-3 max-h-75 overflow-y-auto pr-1">
                             {viewClass.bookings && viewClass.bookings.length > 0 ? (
-                                viewClass.bookings.map((booking) => (
-                                    <div key={booking.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-100">
-                                        <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                                            {booking.user.fullName[0].toUpperCase()}
+                                viewClass.bookings.map((booking) => {
+                                    const studentCategory = booking.user.memberships?.[0]?.category?.name || 'Sin categoría';
+                                    
+                                    return (
+                                        <div key={booking.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 border border-gray-100 transition-colors">
+                                            <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
+                                                {booking.user.fullName[0].toUpperCase()}
+                                            </div>
+                                            <div className="overflow-hidden flex-1">
+                                                <div className="flex justify-between items-start">
+                                                    <p className="font-medium text-sm truncate text-gray-900">{booking.user.fullName}</p>
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 uppercase tracking-tighter shrink-0 border border-gray-200">
+                                                        <Tag className="h-2.5 w-2.5" />
+                                                        {studentCategory}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-gray-500 truncate">{booking.user.email}</p>
+                                            </div>
                                         </div>
-                                        <div className="overflow-hidden">
-                                            <p className="font-medium text-sm truncate">{booking.user.fullName}</p>
-                                            <p className="text-xs text-gray-500 truncate">{booking.user.email}</p>
-                                        </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             ) : (
                                 <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-dashed">
                                     <p className="text-sm">No hay alumnos inscriptos aún.</p>
@@ -760,8 +775,8 @@ export default function ClassesPage() {
 
                 {viewClass.description && (
                     <div className="mt-4 pt-4 border-t">
-                        <h4 className="text-sm font-semibold mb-1">Descripción</h4>
-                        <p className="text-sm text-gray-600">{viewClass.description}</p>
+                        <h4 className="text-sm font-semibold mb-1 text-gray-900">Descripción</h4>
+                        <p className="text-sm text-gray-600 leading-relaxed">{viewClass.description}</p>
                     </div>
                 )}
              </CardContent>

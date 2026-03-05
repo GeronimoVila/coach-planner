@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateClassDto } from './dto/create-class.dto';
+import { UpdateClassDto } from './dto/update-class.dto';
 import { DatabaseService } from 'src/database/database.service';
 import { BookingStatus } from '@repo/database';
 import { CloneWeekDto } from './dto/clone-week.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailService } from '../email/email.service';
 import { PlansService } from '../plans/plans.service';
-import { UpdateClassDto } from './dto/update-class.dto';
 
 @Injectable()
 export class ClassesService {
@@ -141,7 +141,14 @@ export class ClassesService {
         bookings: {
           where: { status: BookingStatus.CONFIRMED }, 
           include: { 
-             user: true
+             user: {
+               include: {
+                 memberships: {
+                   where: { organizationId: orgId },
+                   include: { category: true }
+                 }
+               }
+             }
           }
         }
       }
