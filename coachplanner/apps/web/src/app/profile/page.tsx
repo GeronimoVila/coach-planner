@@ -304,7 +304,7 @@ export default function SettingsPage() {
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                     <Input 
                                         type="password" 
-                                        placeholder="Nueva contraseña (mínimo 6 caracteres)" 
+                                        placeholder="Nueva contraseña (mínimo 8 caracteres)" 
                                         className="pl-9"
                                         value={userData.password}
                                         onChange={e => setUserData({...userData, password: e.target.value})}

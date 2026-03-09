@@ -12,14 +12,14 @@ export class CreditPackagesController {
   constructor(private readonly creditPackagesService: CreditPackagesService) {}
 
   @Post()
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
   create(@Request() req, @Body() createCreditPackageDto: CreateCreditPackageDto) {
     const orgId = req.user.orgId || req.user.organizationId;
     return this.creditPackagesService.create(createCreditPackageDto, orgId);
   }
 
   @Get('student/:studentId')
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
   getHistoryAdmin(@Request() req, @Param('studentId') studentId: string) {
     const orgId = req.user.orgId || req.user.organizationId;
     return this.creditPackagesService.findAllByStudent(studentId, orgId);

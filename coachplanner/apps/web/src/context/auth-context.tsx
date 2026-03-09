@@ -7,7 +7,7 @@ import { jwtDecode } from 'jwt-decode';
 interface JwtPayload {
   sub: string;
   email: string;
-  role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
+  role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER' | 'STAFF';
   orgId?: string;
   categoryId?: number;
   plan?: string;
@@ -20,7 +20,7 @@ interface JwtPayload {
 export interface User {
   id: string;
   email: string;
-  role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
+  role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER'| 'STAFF';
   organizationId: string | null;
   categoryId?: number | null;
   plan?: string;

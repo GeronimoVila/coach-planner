@@ -280,9 +280,10 @@ export class ClassesService {
       const promises = transactionResult.session.bookings.map(async (booking) => {
         await this.notifications.create(
           booking.userId,
-          'Clase Cancelada',
+          'Clase Cancelada ❌',
           notifMessage,
-          'WARNING'
+          'WARNING',
+          orgId
         );
 
         try {

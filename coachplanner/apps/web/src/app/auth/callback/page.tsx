@@ -43,6 +43,8 @@ function CallbackContent() {
 
         login(currentToken, currentUser);
 
+        const redirectUrl = localStorage.getItem('redirect_after_login');
+
         if (intent?.type === 'REGISTER_OWNER') {
           toast.success('¡Autenticación exitosa!');
           router.push('/onboarding/business');
@@ -68,8 +70,18 @@ function CallbackContent() {
           }
         }
 
+        if (intent?.type === 'REGISTER_USER' || redirectUrl) {
+            toast.success('¡Autenticación exitosa!');
+            if (redirectUrl) {
+                localStorage.removeItem('redirect_after_login');
+                router.push(redirectUrl);
+            } else {
+                router.push('/');
+            }
+            return;
+        }
+
         if (currentUser.role === 'STUDENT') {
-            
           if (!currentUser.phoneNumber) {
             router.push('/onboarding/phone');
             return; 

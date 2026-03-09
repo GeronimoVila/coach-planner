@@ -120,4 +120,33 @@ export class EmailService {
       console.error('Error enviando email de recuperación:', error);
     }
   }
+
+  async sendStaffInvitation(email: string, gymName: string, role: string, token: string) {
+    const inviteLink = `${process.env.FRONTEND_URL}/join-team?token=${token}`;
+    const roleName = role === 'INSTRUCTOR' ? 'Profesor' : 'Staff / Administrador';
+
+    try {
+      await this.resend.emails.send({
+        from: 'onboarding@resend.dev',
+        to: email,
+        subject: `Invitación para unirte a ${gymName} en CoachPlanner`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>¡Hola! 👋</h2>
+            <p>Has sido invitado a unirte al equipo de <strong>${gymName}</strong> con el rol de <strong>${roleName}</strong>.</p>
+            <p>Para aceptar la invitación y configurar tu cuenta, haz clic en el siguiente botón:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${inviteLink}" style="background-color: #2563eb; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                Aceptar Invitación
+              </a>
+            </div>
+            <p style="color: #666; font-size: 14px;">Si ya tienes una cuenta en CoachPlanner, solo tendrás que iniciar sesión. Si no, podrás crear una en segundos.</p>
+            <p style="color: #999; font-size: 12px;">Este enlace expirará en 7 días. Si no esperabas este correo, puedes ignorarlo con seguridad.</p>
+          </div>
+        `
+      });
+    } catch (error) {
+      console.error('Error enviando email de invitación:', error);
+    }
+  }
 }

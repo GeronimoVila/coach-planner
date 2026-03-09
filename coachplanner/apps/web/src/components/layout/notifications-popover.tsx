@@ -1,30 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { useState, useEffect } from 'react';
+import { Bell, Check, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bell, Check, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { toast } from 'sonner';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: 'INFO' | 'WARNING' | 'SUCCESS';
-  isRead: boolean;
-  createdAt: string;
-}
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { api } from '@/lib/api';
+import { useAuth } from '@/context/auth-context';
 
 export function NotificationsPopover() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (user) fetchNotifications();
+  }, [user]);
 
   const fetchNotifications = async () => {
     try {
@@ -32,107 +23,100 @@ export function NotificationsPopover() {
       setNotifications(res.data.list);
       setUnreadCount(res.data.unreadCount);
     } catch (error) {
-      console.error('Error cargando notificaciones', error);
+      console.error('Error fetching notifications:', error);
     }
   };
 
-  useEffect(() => {
-    fetchNotifications();
-    
-    const interval = setInterval(() => {
-      fetchNotifications();
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const markAllRead = async () => {
-    if (unreadCount === 0) return;
+  const markAllAsRead = async () => {
     try {
       await api.patch('/notifications/read-all');
+      setNotifications(notifications.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      toast.success('Todas marcadas como leídas');
     } catch (error) {
-      toast.error('Error al actualizar');
+      console.error('Error marking all as read:', error);
     }
   };
 
-  const getIcon = (type: string) => {
+  const markAsRead = async (id: string, isRead: boolean) => {
+    if (isRead) return;
+    try {
+      await api.patch(`/notifications/${id}/read`);
+      setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking as read:', error);
+    }
+  };
+
+  const getBadgeColor = (type: string) => {
     switch (type) {
-      case 'WARNING': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
-      case 'SUCCESS': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-      default: return <Info className="h-4 w-4 text-blue-500" />;
+      case 'SUCCESS': return 'bg-green-100 text-green-700';
+      case 'WARNING': return 'bg-orange-100 text-orange-700';
+      default: return 'bg-blue-100 text-blue-700';
     }
   };
 
   return (
-    <Popover 
-      open={isOpen} 
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (open) {
-          fetchNotifications();
-        }
-      }}
-    >
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative text-gray-500 hover:text-gray-900">
+        <Button variant="ghost" size="icon" className="relative text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-full">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-red-600 border-2 border-white" />
+            <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-600 border-2 border-white animate-pulse" />
           )}
-          <span className="sr-only">Notificaciones</span>
         </Button>
       </PopoverTrigger>
       
-      <PopoverContent className="w-80 p-0 mr-4" align="end">
+      <PopoverContent className="w-80 md:w-96 p-0 mr-4 mt-2 shadow-xl" align="end">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50/50">
-          <h4 className="font-semibold text-sm">Notificaciones</h4>
+          <h4 className="font-semibold text-gray-900">Notificaciones</h4>
           {unreadCount > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-auto px-2 py-1 text-xs text-blue-600 hover:text-blue-700"
-              onClick={markAllRead}
-            >
-              Marcar leídas
+            <Button variant="ghost" size="sm" onClick={markAllAsRead} className="h-auto p-1 text-xs text-blue-600 hover:text-blue-700">
+              <Check className="h-3 w-3 mr-1" /> Marcar leídas
             </Button>
           )}
         </div>
         
-        <ScrollArea className="h-75">
+        <div className="max-h-[60vh] overflow-y-auto">
           {notifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-gray-400">
-              <Bell className="h-8 w-8 mb-2 opacity-20" />
-              <p className="text-sm">No tienes notificaciones</p>
+            <div className="p-8 text-center text-gray-500 text-sm">
+              No tienes notificaciones
             </div>
           ) : (
             <div className="divide-y">
               {notifications.map((notif) => (
                 <div 
                   key={notif.id} 
-                  className={`px-4 py-3 hover:bg-gray-50 transition-colors flex gap-3 ${!notif.isRead ? 'bg-blue-50/30' : ''}`}
+                  className={`p-4 transition-colors hover:bg-gray-50 cursor-default ${notif.isRead ? 'opacity-70' : 'bg-blue-50/30'}`}
+                  onMouseEnter={() => markAsRead(notif.id, notif.isRead)}
                 >
-                  <div className="mt-1 shrink-0">
-                    {getIcon(notif.type)}
+                  <div className="flex justify-between items-start gap-2 mb-1">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${getBadgeColor(notif.type)}`}>
+                      {notif.type === 'SUCCESS' ? 'Éxito' : notif.type === 'WARNING' ? 'Aviso' : 'Info'}
+                    </span>
+                    
+                    {notif.organization?.name && (
+                      <span className="flex items-center text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                        <Building2 className="h-3 w-3 mr-1" />
+                        {notif.organization.name}
+                      </span>
+                    )}
                   </div>
-                  <div className="space-y-1">
-                    <p className={`text-sm ${!notif.isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                      {notif.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground leading-snug">
-                      {notif.message}
-                    </p>
-                    <p className="text-[10px] text-gray-400 pt-1">
-                      {new Date(notif.createdAt).toLocaleDateString()} - {new Date(notif.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                    </p>
-                  </div>
+                  
+                  <p className={`text-sm mt-1.5 ${notif.isRead ? 'font-medium text-gray-700' : 'font-bold text-gray-900'}`}>
+                    {notif.title}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                    {notif.message}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-2">
+                    {new Date(notif.createdAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );

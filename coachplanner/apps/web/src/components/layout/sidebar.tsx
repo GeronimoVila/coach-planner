@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { ownerNavItems, studentNavItems, adminNavItems } from '@/config/nav-items';
+import { ownerNavItems, studentNavItems, adminNavItems, staffNavItems } from '@/config/nav-items';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { 
@@ -59,8 +59,10 @@ export default function Sidebar() {
   let navItems = studentNavItems;
   if (user.role === 'ADMIN') {
     navItems = adminNavItems;
-  } else if (user.role === 'OWNER' || user.role === 'INSTRUCTOR') {
+  } else if (user.role === 'OWNER') {
     navItems = ownerNavItems;
+  } else if (user.role === 'INSTRUCTOR' || user.role === 'STAFF') {
+    navItems = staffNavItems;
   }
 
   const toggleMobile = () => setIsMobileOpen(!isMobileOpen);

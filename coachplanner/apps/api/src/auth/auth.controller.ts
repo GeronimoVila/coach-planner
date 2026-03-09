@@ -8,6 +8,7 @@ import { LoginDto } from './dto/login.dto';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
 import { Role } from '@repo/database';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Injectable()
 export class GoogleAuthGuard extends AuthGuard('google') {
@@ -72,6 +73,19 @@ export class AuthController {
     return this.authService.registerStudent(slug, dto);
   }
 
+  @Post('register-invited')
+  registerInvited(@Body() dto: any) {
+    if (!dto.token || !dto.password || !dto.fullName) {
+      throw new BadRequestException('Faltan datos requeridos');
+    }
+    return this.authService.registerInvited(dto);
+  }
+
+  @Get('invitations/info/:token')
+  getInvitationInfo(@Param('token') token: string) {
+    return this.authService.getInvitationInfo(token);
+  }
+
   @HttpCode(HttpStatus.OK)
   @Post('login')
   login(@Body() loginDto: LoginDto) {
@@ -128,16 +142,15 @@ export class AuthController {
     return this.authService.resetPassword(token, password);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get('my-gyms')
-  async getMyGyms(@Request() req) {
+  @UseGuards(JwtAuthGuard)
+  getMyGyms(@Request() req) {
     return this.authService.getMyGyms(req.user.id);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Post('switch-gym')
-  async switchGym(@Request() req, @Body('targetOrgId') targetOrgId: string) {
-    if (!targetOrgId) throw new BadRequestException('Falta el ID de la organización destino');
+  @UseGuards(JwtAuthGuard)
+  switchGym(@Request() req, @Body('targetOrgId') targetOrgId: string) {
     return this.authService.switchGym(req.user.id, targetOrgId);
   }
 

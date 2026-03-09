@@ -17,11 +17,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [gyms, setGyms] = useState<any[]>([]);
   const [isSwitching, setIsSwitching] = useState(false);
 
-  const publicRoutes = ['/login', '/register', '/register-business'];
+  const publicRoutes = ['/login', '/register', '/register-business', '/join-team'];
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
 
   useEffect(() => {
-    if (user && user.role === 'STUDENT' && !isPublicRoute) {
+    if (user && !isPublicRoute) {
       api.get('/auth/my-gyms')
          .then(res => setGyms(res.data))
          .catch(err => console.error("Error al cargar la lista de gimnasios", err));
@@ -62,7 +62,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main className="transition-all duration-300 ml-0 md:ml-64 min-h-screen flex flex-col">          
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between px-4 md:px-8 bg-gray-50/80 backdrop-blur-sm md:bg-transparent">
               <div className="flex items-center">
-                {user.role === 'STUDENT' && gyms.length > 0 && (
+                {gyms.length > 1 && (
                   <div className={`hidden md:flex relative items-center bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm transition-opacity ${isSwitching ? 'opacity-50 pointer-events-none' : ''}`}>
                     <Building2 className="h-4 w-4 text-blue-600 mr-2 shrink-0" />                   
                     <select

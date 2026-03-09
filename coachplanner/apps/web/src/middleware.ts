@@ -15,7 +15,8 @@ export function middleware(request: NextRequest) {
     '/terms',
     '/auth/callback',
     '/auth/verify',
-    '/auth/reset-password'
+    '/auth/reset-password',
+    '/join-team'
   ];
 
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
@@ -25,7 +26,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (token && isPublicRoute) {
-    if (pathname.startsWith('/auth/callback') || pathname.startsWith('/auth/verify')) {
+    if (pathname.startsWith('/auth/callback') || pathname.startsWith('/auth/verify') || pathname.startsWith('/join-team')) {
         return NextResponse.next();
     }
 

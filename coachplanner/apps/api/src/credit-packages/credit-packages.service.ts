@@ -54,8 +54,9 @@ export class CreditPackagesService {
         await this.notifications.create(
           dto.studentId,
           '¡Pack de Créditos Activado! 🎒',
-          `Se han acreditado ${dto.amount} clases del pack "${dto.name}". Vencen el ${expiresAt.toLocaleDateString()}.`,
-          'SUCCESS'
+          `Se han acreditado ${dto.amount} clases del pack "${dto.name}". Vencen el ${expiresAt.toLocaleDateString('es-ES')}.`,
+          'SUCCESS',
+          orgId
         );
         if (membership.user && membership.user.email) {
             await this.emailService.sendBalanceAdded(

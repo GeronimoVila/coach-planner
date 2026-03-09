@@ -129,7 +129,16 @@ export class BookingsService {
         userId,
         'Reserva Confirmada ✅',
         `Te esperamos en la clase de ${bookingResult.classSession.title} el ${dateStr}.`,
-        'SUCCESS'
+        'SUCCESS',
+        orgId
+      );
+
+      const student = await this.db.user.findUnique({ where: { id: userId }, select: { fullName: true } });
+      await this.notifications.notifyAdmins(
+        orgId,
+        'Nueva Reserva 📅',
+        `El alumno ${student?.fullName || 'Usuario'} se anotó en la clase de ${bookingResult.classSession.title}.`,
+        'INFO'
       );
     } catch (error) {
       console.error('Error enviando notificación de reserva:', error);
@@ -218,16 +227,17 @@ export class BookingsService {
         userId,
         'Reserva Cancelada ↩️',
         `Has cancelado tu asistencia a ${cancelResult.className}. Se te ha devuelto el crédito.`,
-        'INFO'
+        'INFO',
+        orgId
       );
 
       const dateStr = cancelResult.classDate.toLocaleDateString('es-ES', { 
         day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
       });
 
-      await this.notifications.create(
-        cancelResult.instructorId,
-        'Baja en tu clase 📢',
+      await this.notifications.notifyAdmins(
+        orgId,
+        'Baja de Reserva 📢',
         `El alumno ${cancelResult.studentName} canceló su asistencia a ${cancelResult.className} (${dateStr}).`,
         'WARNING'
       );

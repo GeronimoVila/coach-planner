@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, InternalServerErrorException, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from 'src/database/database.service';
@@ -92,7 +92,8 @@ export class AuthService {
         userId,
         '¡Bienvenido! 👋',
         `Te has unido exitosamente a ${org.name}.`,
-        'SUCCESS'
+        'SUCCESS',
+        org.id
     );
 
     try {
@@ -203,6 +204,74 @@ export class AuthService {
       console.error(error);
       throw new InternalServerErrorException('Ocurrió un error inesperado al crear tu cuenta. Por favor, intenta de nuevo en unos minutos.');
     }
+  }
+
+  async registerInvited(dto: any) {
+    const invitation = await this.db.invitation.findUnique({ where: { token: dto.token } });
+    
+    if (!invitation || invitation.status !== 'PENDING') {
+      throw new BadRequestException('Invitación inválida');
+    }
+
+    const existingUser = await this.db.user.findUnique({ where: { email: invitation.email } });
+    if (existingUser) {
+      throw new BadRequestException('El usuario ya existe. Por favor inicia sesión.');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(dto.password, salt);
+
+    const result = await this.db.$transaction(async (tx) => {
+       const user = await tx.user.create({
+         data: {
+           email: invitation.email,
+           fullName: dto.fullName,
+           phoneNumber: dto.phoneNumber,
+           passwordHash: hashedPassword,
+           emailVerified: new Date(),
+           role: 'STUDENT',
+         }
+       });
+
+       await tx.membership.create({
+         data: {
+           userId: user.id,
+           organizationId: invitation.organizationId,
+           role: invitation.role,
+         }
+       });
+
+       await tx.invitation.update({
+         where: { id: invitation.id },
+         data: { status: 'ACCEPTED' }
+       });
+
+       return user;
+    });
+
+    const fullUser = await this.db.user.findUnique({
+      where: { id: result.id },
+      include: { memberships: true, organizationsOwned: true }
+    });
+
+    return this.generateJwt(fullUser, invitation.organizationId);
+  }
+
+  async getInvitationInfo(token: string) {
+    const invitation = await this.db.invitation.findUnique({
+      where: { token },
+      include: { organization: true }
+    });
+
+    if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt < new Date()) {
+      throw new BadRequestException('La invitación no es válida o ha expirado');
+    }
+
+    return {
+      email: invitation.email,
+      role: invitation.role,
+      gymName: invitation.organization.name
+    };
   }
 
   async getGymInfo(slug: string) {
@@ -335,11 +404,11 @@ export class AuthService {
           if (isNewUser) {
               if (token) await this.emailService.sendVerificationEmail(dto.email, token);
               await this.notifications.create(
-                  userId, '¡Bienvenido! 👋', `Gracias por registrarte. Verifica tu correo para continuar.`, 'INFO'
+                  userId, '¡Bienvenido! 👋', `Gracias por registrarte. Verifica tu correo para continuar.`, 'INFO', org.id
               );
           } else {
               await this.notifications.create(
-                  userId, 'Nueva Organización Agregado 🏋️', `Te has unido exitosamente a ${org.name}.`, 'SUCCESS'
+                  userId, 'Nuevo Gimnasio Agregado 🏋️', `Te has unido exitosamente a ${org.name}.`, 'SUCCESS', org.id
               );
           }
           
@@ -417,51 +486,43 @@ export class AuthService {
   }
 
   async getMyGyms(userId: string) {
+    const ownedOrgs = await this.db.organization.findMany({
+      where: { ownerId: userId },
+      select: { id: true, name: true, slug: true }
+    });
+
+    const memberships = await this.db.membership.findMany({
+      where: { userId },
+      include: { organization: { select: { id: true, name: true, slug: true } } }
+    });
+
+    const memberOrgs = memberships.map(m => m.organization);
+
+    const allOrgs = [...ownedOrgs, ...memberOrgs];
+    const uniqueOrgs = Array.from(new Map(allOrgs.map(org => [org.id, org])).values());
+
+    return uniqueOrgs;
+  }
+
+  async switchGym(userId: string, targetOrgId: string) {
     const user = await this.db.user.findUnique({
       where: { id: userId },
-      include: {
-        memberships: {
-          include: {
-            organization: { select: { id: true, name: true, slug: true } }
-          }
-        },
-        organizationsOwned: { select: { id: true, name: true, slug: true } }
+      include: { 
+        memberships: true,
+        organizationsOwned: true 
       }
     });
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
 
-    const gyms: any[] = [];
+    const isOwner = user.organizationsOwned.some(org => org.id === targetOrgId);
+    const membership = user.memberships.find(m => m.organizationId === targetOrgId);
 
-    user.organizationsOwned?.forEach(org => {
-        gyms.push({ id: org.id, name: org.name, slug: org.slug, role: Role.OWNER });
-    });
+    if (!isOwner && !membership) {
+      throw new ForbiddenException('No perteneces a esta organización');
+    }
 
-    user.memberships?.forEach(m => {
-        if (!gyms.find(g => g.id === m.organization.id)) {
-            gyms.push({ id: m.organization.id, name: m.organization.name, slug: m.organization.slug, role: m.role });
-        }
-    });
-
-    return gyms;
-  }
-
-  async switchGym(userId: string, targetOrgId: string) {
-      const user = await this.db.user.findUnique({
-          where: { id: userId },
-          include: { memberships: true, organizationsOwned: true }
-      });
-
-      if (!user) throw new NotFoundException('Usuario no encontrado');
-
-      const hasAccess = user.memberships.some(m => m.organizationId === targetOrgId) || 
-                        user.organizationsOwned.some(o => o.id === targetOrgId);
-
-      if (!hasAccess && user.role !== Role.ADMIN) {
-          throw new UnauthorizedException('No tienes acceso a este gimnasio');
-      }
-
-      return this.generateJwt(user, targetOrgId);
+    return this.generateJwt(user, targetOrgId);
   }
 
   private generateJwt(user: any, targetOrgId?: string) {

@@ -40,7 +40,7 @@ export class StudentsController {
   }
 
   @Patch(':id')
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
   update(
     @Request() req, 
     @Param('id') studentId: string, 

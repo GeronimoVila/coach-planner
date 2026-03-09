@@ -80,6 +80,7 @@ export default function LoginPage() {
       login(access_token, user);
 
       toast.success("¡Bienvenido de nuevo!");
+      const redirectUrl = localStorage.getItem('redirect_after_login');
 
       if (user.role === 'ADMIN') {
         router.push("/admin");
@@ -104,9 +105,19 @@ export default function LoginPage() {
             }
          }
          
-         router.push("/");
+         if (redirectUrl) {
+            localStorage.removeItem('redirect_after_login');
+            router.push(redirectUrl);
+         } else {
+            router.push("/");
+         }
       } else {
-         router.push("/"); 
+         if (redirectUrl) {
+            localStorage.removeItem('redirect_after_login');
+            router.push(redirectUrl);
+         } else {
+            router.push("/"); 
+         }
       }
       
     } catch (error: any) {
