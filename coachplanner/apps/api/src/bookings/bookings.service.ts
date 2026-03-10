@@ -156,7 +156,8 @@ export class BookingsService {
     }
 
     try {
-      const dateStr = bookingResult.classSession.startTime.toLocaleDateString('es-ES', { 
+      const dateStr = bookingResult.classSession.startTime.toLocaleString('es-AR', { 
+        timeZone: 'America/Argentina/Buenos_Aires',
         weekday: 'long', 
         day: 'numeric',
         hour: '2-digit', 
@@ -281,7 +282,8 @@ export class BookingsService {
         orgId
       );
 
-      const dateStr = cancelResult.classDate.toLocaleDateString('es-ES', { 
+      const dateStr = cancelResult.classDate.toLocaleString('es-AR', { 
+        timeZone: 'America/Argentina/Buenos_Aires',
         day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
       });
 
@@ -299,7 +301,7 @@ export class BookingsService {
     return { message: cancelResult.message };
   }
 
-async getStudentHistory(userId: string, orgId: string, page: number = 1, limit: number = 10) {
+  async getStudentHistory(userId: string, orgId: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
 
     const [bookings, total] = await Promise.all([

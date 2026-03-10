@@ -64,10 +64,14 @@ export class CreditPackagesService {
     });
 
     try {
+        const expiresStr = expiresAt.toLocaleDateString('es-AR', {
+            timeZone: 'America/Argentina/Buenos_Aires'
+        });
+
         await this.notifications.create(
           dto.studentId,
           '¡Pack de Créditos Activado! 🎒',
-          `Se han acreditado ${dto.amount} clases del pack "${dto.name}". Vencen el ${expiresAt.toLocaleDateString('es-ES')}.`,
+          `Se han acreditado ${dto.amount} clases del pack "${dto.name}". Vencen el ${expiresStr}.`,
           'SUCCESS',
           orgId
         );
