@@ -15,7 +15,10 @@ import {
   X,
   Lock,
   Key,
-  ScanFace
+  ScanFace,
+  Activity,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +40,7 @@ interface UserDetail {
     isActive: boolean;
   }[];
   memberships: {
+    orgId: string;
     gymName: string;
     role: string;
     credits: number;
@@ -45,6 +49,26 @@ interface UserDetail {
   stats: {
     classesTaught: number;
   };
+}
+
+interface CreditTransaction {
+  id: string;
+  amount: number;
+  type: string;
+  description: string;
+  createdAt: string;
+  performedBy: { fullName: string | null } | null;
+  membership: { organization: { name: string } } | null;
+}
+
+interface AdminActivityTransaction {
+  id: string;
+  amount: number;
+  type: string;
+  description: string;
+  createdAt: string;
+  user: { fullName: string | null; email: string } | null;
+  membership: { organization: { name: string } } | null;
 }
 
 export default function UserDetailPage() {
@@ -61,6 +85,17 @@ export default function UserDetailPage() {
   const [isResetting, setIsResetting] = useState(false);
 
   const [isImpersonating, setIsImpersonating] = useState(false);
+
+  const [history, setHistory] = useState<CreditTransaction[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
+
+  const [adminActivity, setAdminActivity] = useState<AdminActivityTransaction[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
+  const [totalActivityPages, setTotalActivityPages] = useState(1);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -80,6 +115,48 @@ export default function UserDetailPage() {
 
     fetchUser();
   }, [params?.id, router]);
+
+  useEffect(() => {
+    if (!params?.id) return;
+
+    const fetchHistory = async () => {
+      setLoadingHistory(true);
+      try {
+        const url = selectedOrgId === 'ALL' 
+          ? `/students/${params.id}/credit-history?page=${historyPage}&limit=10`
+          : `/students/${params.id}/credit-history?page=${historyPage}&limit=10&orgId=${selectedOrgId}`;
+
+        const { data } = await api.get(url);
+        setHistory(data.data);
+        setTotalPages(data.meta.totalPages);
+      } catch (error) {
+        console.error('Error cargando historial:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    fetchHistory();
+  }, [params?.id, historyPage, selectedOrgId]);
+
+  useEffect(() => {
+    if (!user || user.role === 'STUDENT') return;
+
+    const fetchActivity = async () => {
+      setLoadingActivity(true);
+      try {
+        const { data } = await api.get(`/admin/users/${user.id}/activity?page=${activityPage}&limit=10`);
+        setAdminActivity(data.data);
+        setTotalActivityPages(data.meta.totalPages);
+      } catch (error) {
+        console.error('Error cargando actividad de admin:', error);
+      } finally {
+        setLoadingActivity(false);
+      }
+    };
+
+    fetchActivity();
+  }, [user, activityPage]);
 
   const handleUpdateEmail = async () => {
     if (!user || !newEmail) return;
@@ -145,6 +222,12 @@ export default function UserDetailPage() {
       toast.error('Error al intentar suplantar identidad');
       setIsImpersonating(false);
     }
+  };
+
+  const getBadgeStyle = (amount: number, type: string) => {
+    if (amount > 0) return "bg-green-100 text-green-800 hover:bg-green-200 border-green-200";
+    if (amount < 0) return "bg-red-100 text-red-800 hover:bg-red-200 border-red-200";
+    return "bg-gray-100 text-gray-800 border-gray-200";
   };
 
   if (loading) {
@@ -308,6 +391,210 @@ export default function UserDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-purple-500" /> Historial de Créditos
+            </CardTitle>
+            <CardDescription>
+              Auditoría de ingresos y egresos de créditos de este usuario.
+            </CardDescription>
+          </div>
+          
+          {user.memberships.length > 0 && (
+            <select
+              className="border border-gray-200 rounded-md px-3 py-1.5 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              value={selectedOrgId}
+              onChange={(e) => {
+                setSelectedOrgId(e.target.value);
+                setHistoryPage(1);
+              }}
+            >
+              <option value="ALL">Todas las organizaciones</option>
+              {user.memberships.map((m) => (
+                <option key={m.orgId} value={m.orgId}>
+                  {m.gymName}
+                </option>
+              ))}
+            </select>
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto border rounded-md">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-4 py-3 font-medium text-gray-500">Fecha</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">Gimnasio</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">Concepto</th>
+                  <th className="px-4 py-3 font-medium text-gray-500 text-center">Movimiento</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">Autorizado por</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingHistory ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
+                    </td>
+                  </tr>
+                ) : history.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-gray-500">
+                      No hay movimientos registrados.
+                    </td>
+                  </tr>
+                ) : (
+                  history.map((tx) => (
+                    <tr key={tx.id} className="bg-white border-b hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                        {new Date(tx.createdAt).toLocaleDateString('es-ES', { 
+                          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+                        })}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 font-medium">
+                        {tx.membership?.organization?.name || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {tx.description || tx.type.replace('_', ' ')}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge variant="outline" className={getBadgeStyle(tx.amount, tx.type)}>
+                          {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">
+                        {tx.performedBy?.fullName || 'Sistema automático'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!loadingHistory && totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-sm text-gray-500">
+                Página {historyPage} de {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                  disabled={historyPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                  disabled={historyPage === totalPages}
+                >
+                  Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {user.role !== 'STUDENT' && (
+        <Card className="border-blue-100 bg-blue-50/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-800">
+              <Activity className="h-5 w-5 text-blue-500" /> Créditos Otorgados (Auditoría)
+            </CardTitle>
+            <CardDescription>
+              Historial de movimientos, cargas y quitas de créditos que este usuario ha realizado a otros alumnos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto border rounded-md border-blue-100 bg-white">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-blue-50/50 border-b border-blue-100">
+                  <tr>
+                    <th className="px-4 py-3 font-medium text-gray-600">Fecha</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Alumno Receptor</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Gimnasio</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Acción</th>
+                    <th className="px-4 py-3 font-medium text-gray-600 text-center">Créditos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingActivity ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-400" />
+                      </td>
+                    </tr>
+                  ) : adminActivity.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-gray-500">
+                        No ha realizado movimientos a otros alumnos.
+                      </td>
+                    </tr>
+                  ) : (
+                    adminActivity.map((tx) => (
+                      <tr key={tx.id} className="bg-white border-b hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                          {new Date(tx.createdAt).toLocaleDateString('es-ES', { 
+                            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+                          })}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          {tx.user?.fullName || tx.user?.email || 'Usuario Desconocido'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {tx.membership?.organization?.name || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          {tx.description || tx.type.replace('_', ' ')}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant="outline" className={getBadgeStyle(tx.amount, tx.type)}>
+                            {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {!loadingActivity && totalActivityPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <span className="text-sm text-gray-500">
+                  Página {activityPage} de {totalActivityPages}
+                </span>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                    disabled={activityPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setActivityPage(p => Math.min(totalActivityPages, p + 1))}
+                    disabled={activityPage === totalActivityPages}
+                  >
+                    Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-red-100 bg-red-50/10">
         <CardHeader>

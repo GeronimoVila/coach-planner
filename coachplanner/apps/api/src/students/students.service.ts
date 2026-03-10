@@ -204,4 +204,68 @@ export class StudentsService {
       data: { phoneNumber }
     });
   }
+
+  async getCreditHistory(studentId: string, orgId?: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const whereCondition: any = { userId: studentId };
+    if (orgId && orgId !== 'ALL') {
+      whereCondition.membership = { organizationId: orgId };
+    }
+
+    const [transactions, total] = await Promise.all([
+      this.db.creditTransaction.findMany({
+        where: whereCondition,
+        include: {
+          performedBy: { select: { fullName: true } },
+          membership: { include: { organization: { select: { name: true } } } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: skip,
+        take: limit,
+      }),
+      this.db.creditTransaction.count({
+        where: whereCondition
+      })
+    ]);
+
+    return {
+      data: transactions,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      }
+    };
+  }
+
+  async findOne(studentId: string, orgId: string) {
+    const membership = await this.db.membership.findUnique({
+      where: {
+        userId_organizationId: { userId: studentId, organizationId: orgId },
+      },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true, phoneNumber: true, createdAt: true },
+        },
+        category: { select: { name: true } }
+      },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('El alumno no pertenece a tu gimnasio');
+    }
+
+    return {
+      id: membership.user.id,
+      fullName: membership.user.fullName,
+      email: membership.user.email,
+      phoneNumber: membership.user.phoneNumber,
+      joinedAt: membership.joinedAt,
+      credits: membership.credits,
+      status: membership.status,
+      categoryName: membership.category?.name,
+    };
+  }
 }

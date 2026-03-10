@@ -16,7 +16,7 @@ export class BookingsService {
     private readonly notifications: NotificationsService
   ) {}
 
-async create(userId: string, orgId: string, dto: CreateBookingDto) {
+  async create(userId: string, orgId: string, dto: CreateBookingDto) {
     const membership = await this.db.membership.findUnique({
       where: { userId_organizationId: { userId, organizationId: orgId } },
     });
@@ -119,6 +119,18 @@ async create(userId: string, orgId: string, dto: CreateBookingDto) {
         await tx.membership.update({
           where: { id: membership.id },
           data: { credits: { decrement: 1 } },
+        });
+
+        await tx.creditTransaction.create({
+          data: {
+            membershipId: membership.id,
+            creditPackageId: targetPackage.id,
+            userId: userId,
+            performedById: userId,
+            amount: -1,
+            type: 'BOOKING_DEDUCT',
+            description: `Reserva para clase: ${classSession.title}`,
+          }
         });
 
         return booking;
@@ -234,9 +246,21 @@ async create(userId: string, orgId: string, dto: CreateBookingDto) {
         data: { remainingAmount: { increment: 1 } }
       });
 
-      await tx.membership.update({
+      const membership = await tx.membership.update({
         where: { userId_organizationId: { userId, organizationId: orgId } },
         data: { credits: { increment: 1 } }
+      });
+
+      await tx.creditTransaction.create({
+        data: {
+          membershipId: membership.id,
+          creditPackageId: booking.creditPackageId,
+          userId: userId,
+          performedById: userId,
+          amount: 1,
+          type: 'BOOKING_REFUND',
+          description: `Cancelación de reserva: ${booking.classSession.title}`,
+        }
       });
 
       return { 

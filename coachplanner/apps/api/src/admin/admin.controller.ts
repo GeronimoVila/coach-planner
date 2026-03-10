@@ -71,4 +71,13 @@ export class AdminController {
   updateAnnouncement(@Body() body: { message: string; isActive: boolean; type: string }) {
     return this.adminService.updateAnnouncement(body.message, body.isActive, body.type);
   }
+
+  @Get('users/:id/activity')
+  async getAdminActivity(
+    @Param('id') id: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10'
+  ) {
+    return this.adminService.getAdminActivity(id, Number(page), Number(limit));
+  }
 }

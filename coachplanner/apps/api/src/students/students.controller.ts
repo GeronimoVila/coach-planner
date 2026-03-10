@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Request, UseGuards, Patch, Param, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request, UseGuards, Patch, Param, BadRequestException, Query } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -96,4 +96,34 @@ export class StudentsController {
       message: 'Teléfono actualizado correctamente' 
     }
   };
+
+@Get(':id/credit-history')
+  @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
+  async getStudentCreditHistory(
+    @Request() req,
+    @Param('id') studentId: string,
+    @Query('orgId') queryOrgId?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10'
+  ) {
+    let orgIdToFilter = queryOrgId;
+    
+    if (req.user.role !== Role.ADMIN) {
+      orgIdToFilter = req.user.orgId || req.user.organizationId;
+    }
+
+    return this.studentsService.getCreditHistory(
+      studentId, 
+      orgIdToFilter, 
+      Number(page), 
+      Number(limit)
+    );
+  }
+
+  @Get(':id')
+  @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
+  findOne(@Request() req, @Param('id') studentId: string) {
+    const orgId = req.user.orgId || req.user.organizationId;
+    return this.studentsService.findOne(studentId, orgId);
+  }
 }

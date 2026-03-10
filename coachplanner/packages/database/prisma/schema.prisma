@@ -42,6 +42,14 @@ enum InvitationStatus {
   EXPIRED
 }
 
+enum TransactionType {
+  MANUAL_ADD
+  MANUAL_REMOVE
+  BOOKING_DEDUCT
+  BOOKING_REFUND
+  PACKAGE_EXPIRED
+}
+
 // --- MODELOS ---
 
 model User {
@@ -65,6 +73,8 @@ model User {
   instructedClasses  ClassSession[] // Clases que da
   bookings           Booking[]
   notifications      Notification[]
+  transactions         CreditTransaction[] @relation("UserTransactions")
+  performedTransactions CreditTransaction[] @relation("PerformedTransactions")
 
   @@map("users")
 }
@@ -112,6 +122,7 @@ model Membership {
   organization   Organization    @relation(fields: [organizationId], references: [id])
   category       Category?       @relation(fields: [categoryId], references: [id])
   creditPackages CreditPackage[]
+  creditTransactions CreditTransaction[]
 
   // Validaciones
   @@unique([userId, organizationId])
@@ -159,6 +170,7 @@ model CreditPackage {
 
   membership Membership @relation(fields: [membershipId], references: [id])
   bookings   Booking[]
+  creditTransactions CreditTransaction[]
 
   @@map("credit_packages")
 }
@@ -260,4 +272,26 @@ model OrganizationLink {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("organization_links")
+}
+
+model CreditTransaction {
+  id              String          @id @default(uuid())
+  membershipId    String          @map("membership_id")
+  creditPackageId String?         @map("credit_package_id")
+  userId          String          @map("user_id")
+  performedById   String          @map("performed_by_id")
+  
+  amount          Int
+  type            TransactionType
+  description     String?
+  
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  // Relaciones
+  membership    Membership     @relation(fields: [membershipId], references: [id])
+  creditPackage CreditPackage? @relation(fields: [creditPackageId], references: [id])
+  user          User           @relation("UserTransactions", fields: [userId], references: [id])
+  performedBy   User           @relation("PerformedTransactions", fields: [performedById], references: [id])
+
+  @@map("credit_transactions")
 }

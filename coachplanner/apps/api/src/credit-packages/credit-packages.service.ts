@@ -12,7 +12,7 @@ export class CreditPackagesService {
     private readonly emailService: EmailService
   ) {}
 
-  async create(dto: CreateCreditPackageDto, orgId: string) {
+  async create(dto: CreateCreditPackageDto, orgId: string, adminId: string) {
     const membership = await this.db.membership.findUnique({
       where: {
         userId_organizationId: {
@@ -48,8 +48,21 @@ export class CreditPackagesService {
         },
       });
 
+      await tx.creditTransaction.create({
+        data: {
+          membershipId: membership.id,
+          creditPackageId: creditPackage.id,
+          userId: dto.studentId,
+          performedById: adminId,
+          amount: dto.amount,
+          type: 'MANUAL_ADD',
+          description: `Pack añadido: ${dto.name}`,
+        }
+      });
+
       return { creditPackage, updatedMembership };
     });
+
     try {
         await this.notifications.create(
           dto.studentId,

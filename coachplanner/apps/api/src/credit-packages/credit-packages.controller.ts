@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Get, Param } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Param, Req } from '@nestjs/common';
 import { CreditPackagesService } from './credit-packages.service';
 import { CreateCreditPackageDto } from './dto/create-credit-package.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -13,9 +13,10 @@ export class CreditPackagesController {
 
   @Post()
   @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
-  create(@Request() req, @Body() createCreditPackageDto: CreateCreditPackageDto) {
-    const orgId = req.user.orgId || req.user.organizationId;
-    return this.creditPackagesService.create(createCreditPackageDto, orgId);
+  async createPackage(@Body() dto: CreateCreditPackageDto, @Req() req) {
+    const orgId = req.user.orgId; 
+    const adminId = req.user.id;
+    return this.creditPackagesService.create(dto, orgId, adminId);
   }
 
   @Get('student/:studentId')

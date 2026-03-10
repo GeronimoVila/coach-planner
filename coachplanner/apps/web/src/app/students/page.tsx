@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, Search, UserPlus, Mail, Calendar, User as UserIcon, CreditCard, Plus, Tag
 } from 'lucide-react';
+import Link from 'next/link';
 
 interface Student {
   id: string;
@@ -265,15 +266,15 @@ export default function StudentsPage() {
                     <div className="col-span-4 flex items-center gap-3 w-full min-w-0 relative">
                       <div className={`absolute -left-4 top-0 bottom-0 w-1 md:hidden ${student.status === 'ACTIVE' ? 'bg-green-500' : 'bg-red-500'}`} />
                       
-                      <div className={`h-10 w-10 shrink-0 rounded-full flex items-center justify-center font-bold text-sm border-2 ${student.status === 'ACTIVE' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      <Link href={`/students/${student.id}`} className={`h-10 w-10... `}>
                         {student.fullName?.[0]?.toUpperCase() || student.email[0].toUpperCase()}
-                      </div>
-                      
+                      </Link>
+
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900 truncate">
-                               {student.fullName?.replace('undefined', '').trim() || 'Sin nombre'}
-                            </p>
+                            <Link href={`/students/${student.id}`} className="font-medium...">
+                              {student.fullName?.replace('undefined', '').trim() || 'Sin nombre'}
+                            </Link>
                             {student.status === 'ACTIVE' ? (
                                 <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 uppercase tracking-wider">Activo</span>
                             ) : (

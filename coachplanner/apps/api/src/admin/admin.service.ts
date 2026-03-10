@@ -167,6 +167,7 @@ export class AdminService {
       createdAt: user.createdAt,
       ownedGyms: user.organizationsOwned,
       memberships: user.memberships.map(m => ({
+        orgId: m.organization.id,
         gymName: m.organization.name,
         role: m.role,
         credits: m.credits,
@@ -259,6 +260,42 @@ export class AdminService {
       },
       activity: {
         classesToday
+      }
+    };
+  }
+
+  async getAdminActivity(adminId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const [transactions, total] = await Promise.all([
+      this.db.creditTransaction.findMany({
+        where: {
+          performedById: adminId,
+          userId: { not: adminId }
+        },
+        include: {
+          user: { select: { fullName: true, email: true } },
+          membership: { include: { organization: { select: { name: true } } } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: skip,
+        take: limit,
+      }),
+      this.db.creditTransaction.count({
+        where: {
+          performedById: adminId,
+          userId: { not: adminId }
+        }
+      })
+    ]);
+
+    return {
+      data: transactions,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       }
     };
   }
