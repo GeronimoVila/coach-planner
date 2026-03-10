@@ -18,7 +18,9 @@ import {
   ScanFace,
   Activity,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  UserMinus,
+  AlertTriangle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +35,7 @@ interface UserDetail {
   email: string;
   role: string;
   createdAt: string;
+  deletedAt: string | null;
   ownedGyms: {
     id: string;
     name: string;
@@ -85,6 +88,7 @@ export default function UserDetailPage() {
   const [isResetting, setIsResetting] = useState(false);
 
   const [isImpersonating, setIsImpersonating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [history, setHistory] = useState<CreditTransaction[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -224,6 +228,45 @@ export default function UserDetailPage() {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!user) return;
+    
+    const isConfirmed = confirm(
+        `¡ATENCIÓN! ¿Estás seguro de que deseas desactivar la cuenta de ${user.email}?\n\n` +
+        `Esta es una acción global. El usuario ya no podrá iniciar sesión en la plataforma, pero sus registros históricos (clases, transacciones) se mantendrán intactos para reportes.\n\n` +
+        `Si deseas proceder, haz clic en "Aceptar".`
+    );
+
+    if (!isConfirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await api.delete(`/admin/users/${user.id}`);
+      toast.success('Usuario desactivado exitosamente');
+      router.push('/admin/users');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al intentar desactivar la cuenta');
+      setIsDeleting(false);
+    }
+  };
+
+  const handleRestoreUser = async () => {
+    if (!user) return;
+    
+    if (!confirm(`¿Estás seguro de que deseas reactivar la cuenta de ${user.email}? Podrá volver a iniciar sesión de inmediato.`)) return;
+
+    setIsDeleting(true);
+    try {
+      await api.patch(`/admin/users/${user.id}/restore`);
+      toast.success('Usuario reactivado exitosamente');
+      setUser({ ...user, deletedAt: null });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al intentar reactivar la cuenta');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const getBadgeStyle = (amount: number, type: string) => {
     if (amount > 0) return "bg-green-100 text-green-800 hover:bg-green-200 border-green-200";
     if (amount < 0) return "bg-red-100 text-red-800 hover:bg-red-200 border-red-200";
@@ -241,7 +284,7 @@ export default function UserDetailPage() {
   if (!user) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       <Button variant="ghost" size="sm" asChild className="mb-4">
         <Link href="/admin/users">
           <ArrowLeft className="mr-2 h-4 w-4" /> Volver a la lista
@@ -596,43 +639,93 @@ export default function UserDetailPage() {
         </Card>
       )}
 
-      <Card className="border-red-100 bg-red-50/10">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-gray-800">
-            <Lock className="h-5 w-5 text-gray-500" /> Seguridad
-          </CardTitle>
-          <CardDescription>
-            Restablecer contraseña manualmente. El usuario deberá usar esta nueva clave para ingresar.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-4 max-w-md">
-            <div className="grid w-full gap-1.5">
-              <label htmlFor="pass" className="text-sm font-medium text-gray-700">
-                Nueva Contraseña Temporal
-              </label>
-              <div className="relative">
-                <Key className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                <Input
-                  id="pass"
-                  type="text" 
-                  placeholder="Ej: Gimnasio123"
-                  className="pl-9 bg-white"
-                  value={resetPassword}
-                  onChange={(e) => setResetPassword(e.target.value)}
-                />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="border-red-100 bg-red-50/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-gray-800">
+              <Lock className="h-5 w-5 text-gray-500" /> Seguridad
+            </CardTitle>
+            <CardDescription>
+              Restablecer contraseña manualmente. El usuario deberá usar esta nueva clave para ingresar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+              <div className="grid w-full gap-1.5 flex-1">
+                <label htmlFor="pass" className="text-sm font-medium text-gray-700">
+                  Nueva Contraseña Temporal
+                </label>
+                <div className="relative">
+                  <Key className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="pass"
+                    type="text" 
+                    placeholder="Ej: Gimnasio123"
+                    className="pl-9 bg-white"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                  />
+                </div>
               </div>
+              <Button 
+                onClick={handleResetPassword} 
+                disabled={!resetPassword || isResetting}
+                className="bg-gray-900 hover:bg-gray-800 w-full sm:w-auto"
+              >
+                {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Actualizar'}
+              </Button>
             </div>
-            <Button 
-              onClick={handleResetPassword} 
-              disabled={!resetPassword || isResetting}
-              className="bg-gray-900 hover:bg-gray-800"
-            >
-              {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Actualizar'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {user.role !== 'ADMIN' && (
+          <Card className={user.deletedAt ? "border-green-200 bg-green-50/30" : "border-red-200 bg-white"}>
+            <CardHeader>
+              <CardTitle className={`flex items-center gap-2 ${user.deletedAt ? 'text-green-700' : 'text-red-600'}`}>
+                {user.deletedAt ? <Check className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                {user.deletedAt ? 'Cuenta Desactivada' : 'Zona de Peligro'}
+              </CardTitle>
+              <CardDescription>
+                {user.deletedAt 
+                  ? `Esta cuenta fue desactivada el ${new Date(user.deletedAt).toLocaleDateString()}. El usuario no tiene acceso.`
+                  : 'Desactivar cuenta a nivel global. El usuario no podrá acceder al sistema.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600 max-w-[60%]">
+                  {user.deletedAt 
+                    ? 'Al reactivarla, el usuario recuperará el acceso inmediato a todos sus gimnasios.'
+                    : 'Los registros históricos (asistencias, pagos) se conservarán por seguridad.'}
+                </p>
+                
+                {user.deletedAt ? (
+                  <Button 
+                    variant="outline"
+                    onClick={handleRestoreUser}
+                    disabled={isDeleting}
+                    className="shrink-0 border-green-600 text-green-700 hover:bg-green-50"
+                  >
+                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                    Reactivar Cuenta
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="destructive"
+                    onClick={handleDeleteUser}
+                    disabled={isDeleting}
+                    className="shrink-0"
+                  >
+                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserMinus className="h-4 w-4 mr-2" />}
+                    Desactivar Cuenta
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
     </div>
   );
 }

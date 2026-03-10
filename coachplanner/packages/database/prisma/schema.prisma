@@ -66,6 +66,7 @@ model User {
   verificationToken    String?   @unique
   resetPasswordToken   String?   @unique
   resetPasswordExpires DateTime?
+  deletedAt  DateTime?  @map("deleted_at")
 
   // Relaciones
   organizationsOwned Organization[] // Gyms que posee

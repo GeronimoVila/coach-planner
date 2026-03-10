@@ -173,7 +173,7 @@ export class OrganizationsService {
 
   async acceptInvitation(userId: string, token: string) {
     const user = await this.db.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (!user || user.deletedAt) throw new NotFoundException('Usuario no encontrado o desactivado');
 
     const invitation = await this.db.invitation.findUnique({
       where: { token },
@@ -235,7 +235,8 @@ export class OrganizationsService {
     return this.db.membership.findMany({
       where: {
         organizationId: orgId,
-        role: { in: ['INSTRUCTOR', 'STAFF'] }
+        role: { in: ['INSTRUCTOR', 'STAFF'] },
+        user: { deletedAt: null }
       },
       include: {
         user: { select: { id: true, fullName: true, email: true, avatarUrl: true } }

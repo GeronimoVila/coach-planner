@@ -30,6 +30,10 @@ export class AuthService {
       }
     });
 
+    if (user && user.deletedAt) {
+        throw new UnauthorizedException('Esta cuenta ha sido desactivada por un administrador.');
+    }
+
     if (!user) {
       if (action === 'login') {
          throw new NotFoundException('user_not_found');
@@ -119,8 +123,8 @@ export class AuthService {
       where: { verificationToken: token }
     });
 
-    if (!user) {
-        throw new NotFoundException('Token de verificación inválido o expirado.');
+    if (!user || user.deletedAt) {
+        throw new NotFoundException('Token de verificación inválido o cuenta desactivada.');
     }
 
     await this.db.user.update({
@@ -344,6 +348,9 @@ export class AuthService {
         let verificationToken: string | null = null; 
 
         if (existingUser) {
+            if (existingUser.deletedAt) {
+                throw new UnauthorizedException('Esta cuenta se encuentra desactivada por la plataforma.');
+            }
             if (!existingUser.passwordHash) {
                 throw new ConflictException('El usuario ya existe pero no tiene contraseña configurada. Contacta soporte o entra con Google.');
             }
@@ -433,6 +440,9 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
+    if (user.deletedAt) {
+      throw new UnauthorizedException('Esta cuenta ha sido desactivada por un administrador.');
+    }
     if (!user.passwordHash) {
       throw new UnauthorizedException('Tu cuenta está vinculada a Google. Por favor, inicia sesión con Google.');
     }
@@ -457,6 +467,9 @@ export class AuthService {
 
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
+    }
+    if (user.deletedAt) {
+      throw new UnauthorizedException('No puedes suplantar a un usuario desactivado.');
     }
 
     return this.generateJwt(user);
@@ -514,6 +527,7 @@ export class AuthService {
     });
 
     if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (user.deletedAt) throw new UnauthorizedException('Cuenta desactivada');
 
     const isOwner = user.organizationsOwned.some(org => org.id === targetOrgId);
     const membership = user.memberships.find(m => m.organizationId === targetOrgId);
@@ -606,7 +620,8 @@ export class AuthService {
             email: {
                 equals: email.toLowerCase().trim(),
                 mode: 'insensitive'
-            } 
+            },
+            deletedAt: null
         } 
     });
 
@@ -652,8 +667,8 @@ export class AuthService {
         where: { resetPasswordToken: token }
     });
 
-    if (!user) {
-        console.error("❌ [AuthService] Token no encontrado en la base de datos.");
+    if (!user || user.deletedAt) {
+        console.error("❌ [AuthService] Token no encontrado o usuario borrado.");
         throw new BadRequestException('El enlace es inválido o ya ha sido utilizado.');
     }
 
@@ -686,7 +701,7 @@ export class AuthService {
       }
     });
 
-    if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user || user.deletedAt) throw new UnauthorizedException('Usuario no encontrado o desactivado');
 
     return this.generateJwt(user);
   }
