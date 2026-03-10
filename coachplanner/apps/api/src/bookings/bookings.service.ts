@@ -299,25 +299,31 @@ export class BookingsService {
     return { message: cancelResult.message };
   }
 
-  async getStudentHistory(userId: string, orgId: string) {
-    const bookings = await this.db.booking.findMany({
-      where: {
-        userId: userId,
-        classSession: {
-          organizationId: orgId,
+async getStudentHistory(userId: string, orgId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const [bookings, total] = await Promise.all([
+      this.db.booking.findMany({
+        where: {
+          userId: userId,
+          classSession: { organizationId: orgId },
         },
-      },
-      include: {
-        classSession: {
-          include: {
-            instructor: { select: { fullName: true } }
-          }
-        }, 
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        include: {
+          classSession: {
+            include: { instructor: { select: { fullName: true } } }
+          }, 
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: skip,
+        take: limit,
+      }),
+      this.db.booking.count({
+        where: {
+          userId: userId,
+          classSession: { organizationId: orgId },
+        }
+      })
+    ]);
 
     const historyLog: any[] = [];
 
@@ -336,7 +342,7 @@ export class BookingsService {
         historyLog.push({
           id: booking.id + '_cancelled',
           action: 'CANCELLED',
-          date: (booking as any).updatedAt, 
+          date: (booking as any).updatedAt || booking.createdAt, 
           className: booking.classSession.title,
           instructorName: booking.classSession.instructor?.fullName || 'Sin instructor',
           classDate: booking.classSession.startTime,
@@ -345,6 +351,14 @@ export class BookingsService {
       }
     });
 
-    return historyLog.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return {
+      data: historyLog.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      }
+    };
   }
 }

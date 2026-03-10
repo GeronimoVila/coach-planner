@@ -6,6 +6,7 @@ import { useAuth } from '@/context/auth-context';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   Loader2, 
   CreditCard, 
@@ -13,7 +14,9 @@ import {
   CheckCircle2, 
   XCircle, 
   ScrollText,
-  User
+  User,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -44,7 +47,11 @@ export default function CreditsPage() {
   const [loading, setLoading] = useState(true);
   const [totalCredits, setTotalCredits] = useState(0);
   const [packages, setPackages] = useState<CreditPackage[]>([]);
+  
   const [history, setHistory] = useState<HistoryLog[]>([]);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -60,13 +67,17 @@ export default function CreditsPage() {
     fetchData();
   }, [user, authLoading, router]);
 
+  useEffect(() => {
+    if (!user || user.role !== 'STUDENT') return;
+    fetchHistoryPage();
+  }, [historyPage]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [statsRes, packsRes, historyRes] = await Promise.all([
+      const [statsRes, packsRes] = await Promise.all([
         api.get('/students/me'),
-        api.get('/credit-packages/me'),
-        api.get('/bookings/history')
+        api.get('/credit-packages/me')
       ]);
 
       setTotalCredits(statsRes.data.credits);
@@ -76,15 +87,30 @@ export default function CreditsPage() {
       );
       setPackages(sortedPacks);
 
-      const sortedHistory = historyRes.data.sort((a: HistoryLog, b: HistoryLog) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      setHistory(sortedHistory);
+      await fetchHistoryPage();
 
     } catch (error) {
       console.error('Error cargando créditos', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchHistoryPage = async () => {
+    setLoadingHistory(true);
+    try {
+      const historyRes = await api.get(`/bookings/history?page=${historyPage}&limit=10`);
+      
+      const sortedHistory = historyRes.data.data.sort((a: HistoryLog, b: HistoryLog) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      
+      setHistory(sortedHistory);
+      setTotalPages(historyRes.data.meta.totalPages);
+    } catch (error) {
+      console.error('Error cargando historial de reservas', error);
+    } finally {
+      setLoadingHistory(false);
     }
   };
 
@@ -130,25 +156,25 @@ export default function CreditsPage() {
                     <ScrollText className="h-5 w-5 text-blue-500" />
                     <CardTitle>Movimientos de Créditos</CardTitle>
                 </div>
-                <CardDescription>Cronología de tus reservas y cancelaciones (más reciente primero).</CardDescription>
+                <CardDescription>Cronología de tus reservas y cancelaciones.</CardDescription>
             </CardHeader>
             <CardContent>
-                {loading ? (
-                    <div className="py-8 text-center"><Loader2 className="animate-spin mx-auto" /></div>
+                {loadingHistory || loading ? (
+                    <div className="py-8 text-center"><Loader2 className="animate-spin mx-auto text-blue-500" /></div>
                 ) : history.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-xl">
                         <p>No hay movimientos registrados.</p>
                     </div>
                 ) : (
-                    <div className="rounded-md border overflow-hidden">
-                        <div className="max-h-100 overflow-y-auto">
+                    <div className="rounded-md border overflow-hidden bg-white">
+                        <div className="overflow-x-auto">
                             <table className="w-full text-sm relative">
-                                <thead className="bg-gray-50 text-gray-500 border-b sticky top-0 z-10">
+                                <thead className="bg-gray-50 text-gray-500 border-b">
                                     <tr>
-                                        <th className="px-4 py-3 text-left font-medium bg-gray-50">Acción</th>
-                                        <th className="px-4 py-3 text-left font-medium bg-gray-50">Clase / Instructor</th>
-                                        <th className="px-4 py-3 text-center font-medium bg-gray-50">Créditos</th>
-                                        <th className="px-4 py-3 text-right font-medium bg-gray-50">Fecha</th>
+                                        <th className="px-4 py-3 text-left font-medium bg-gray-50 whitespace-nowrap">Acción</th>
+                                        <th className="px-4 py-3 text-left font-medium bg-gray-50 min-w-50">Clase / Instructor</th>
+                                        <th className="px-4 py-3 text-center font-medium bg-gray-50 whitespace-nowrap">Créditos</th>
+                                        <th className="px-4 py-3 text-right font-medium bg-gray-50 whitespace-nowrap">Fecha</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
@@ -190,6 +216,32 @@ export default function CreditsPage() {
                                 </tbody>
                             </table>
                         </div>
+                        
+                        {totalPages > 1 && (
+                          <div className="flex items-center justify-between p-4 border-t bg-gray-50">
+                            <span className="text-sm text-gray-500">
+                              Página {historyPage} de {totalPages}
+                            </span>
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                                disabled={historyPage === 1 || loadingHistory}
+                              >
+                                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                                disabled={historyPage === totalPages || loadingHistory}
+                              >
+                                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                     </div>
                 )}
             </CardContent>
@@ -213,12 +265,12 @@ export default function CreditsPage() {
                 <p>No tienes historial de compras.</p>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-lg border">
+              <div className="overflow-hidden rounded-lg border bg-white">
                 <div className="max-h-80 overflow-y-auto">
                     <table className="w-full text-sm text-left relative">
                     <thead className="bg-gray-50 text-gray-500 font-medium sticky top-0 z-10 border-b">
                         <tr>
-                        <th className="px-4 py-3 bg-gray-50">Paquete</th>
+                        <th className="px-4 py-3 bg-gray-50 whitespace-nowrap">Paquete</th>
                         <th className="px-4 py-3 hidden sm:table-cell bg-gray-50">Carga</th>
                         <th className="px-4 py-3 text-center bg-gray-50">Clases</th>
                         <th className="px-4 py-3 hidden sm:table-cell bg-gray-50">Vencimiento</th>
@@ -232,20 +284,20 @@ export default function CreditsPage() {
 
                         return (
                             <tr key={pkg.id} className="bg-white hover:bg-gray-50 transition-colors">
-                            <td className="px-4 py-3 font-medium text-gray-900">
+                            <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
                                 {pkg.name || 'Pack Estándar'}
                             </td>
-                            <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
+                            <td className="px-4 py-3 text-gray-500 hidden sm:table-cell whitespace-nowrap">
                                 {format(new Date(pkg.createdAt), 'dd/MM/yy', { locale: es })}
                             </td>
-                            <td className="px-4 py-3 text-center">
+                            <td className="px-4 py-3 text-center whitespace-nowrap">
                                 <span className="font-semibold text-gray-900">{pkg.remainingAmount}</span>
                                 <span className="text-gray-400"> / {pkg.initialAmount}</span>
                             </td>
-                            <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
+                            <td className="px-4 py-3 text-gray-500 hidden sm:table-cell whitespace-nowrap">
                                 {format(new Date(pkg.expiresAt), 'dd MMM yyyy', { locale: es })}
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
                                 <StatusIcon className="h-3 w-3" />
                                 {status.label}
