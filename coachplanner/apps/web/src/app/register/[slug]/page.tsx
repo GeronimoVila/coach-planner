@@ -42,6 +42,7 @@ export default function RegisterStudentPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phoneNumber: '',
     password: '',
     confirmPassword: '',
     categoryId: '',
@@ -86,11 +87,12 @@ export default function RegisterStudentPage() {
     if (
       !formData.name.trim() || 
       !formData.email.trim() || 
+      !formData.phoneNumber.trim() ||
       !formData.password || 
       !formData.confirmPassword
     ) {
       toast.warning('Faltan datos', {
-        description: 'Por favor, completa nombre, email y contraseñas.'
+        description: 'Por favor, completa todos los campos.'
       });
       return;
     }
@@ -123,6 +125,14 @@ export default function RegisterStudentPage() {
         return;
     }
 
+    const phoneTrimmed = formData.phoneNumber.replace(/\s+/g, '');
+    if (phoneTrimmed.length < 8) {
+      toast.error('Número de celular inválido', {
+        description: 'Por favor ingresa un número de teléfono válido (mínimo 8 caracteres).'
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     toast.dismiss();
 
@@ -133,6 +143,7 @@ export default function RegisterStudentPage() {
         body: JSON.stringify({
             name: formData.name,
             email: formData.email,
+            phoneNumber: formData.phoneNumber,
             password: formData.password,
             categoryId: categories.length > 0 && formData.categoryId ? Number(formData.categoryId) : undefined
         }),
@@ -272,6 +283,19 @@ export default function RegisterStudentPage() {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Número de Celular</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                placeholder="Ej: 11 1234-5678"
+                required
+                disabled={isSubmitting}
+                value={formData.phoneNumber}
+                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+              />
+            </div>
+
             {categories.length > 0 && (
                 <div className="space-y-2">
                 <Label htmlFor="category">Disciplina / Categoría</Label>
@@ -302,7 +326,7 @@ export default function RegisterStudentPage() {
                 <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="******"
+                    placeholder="********"
                     required
                     disabled={isSubmitting}
                     value={formData.password}
@@ -328,7 +352,7 @@ export default function RegisterStudentPage() {
                 <Input
                     id="confirmPassword"
                     type={showPassword ? "text" : "password"}
-                    placeholder="******"
+                    placeholder="********"
                     required
                     disabled={isSubmitting}
                     value={formData.confirmPassword}
@@ -353,7 +377,7 @@ export default function RegisterStudentPage() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creando cuenta...
                 </>
               ) : (
-                'Registrarse con Email'
+                'Registrarse'
               )}
             </Button>
           </form>

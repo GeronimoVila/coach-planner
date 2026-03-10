@@ -62,9 +62,48 @@ export class DashboardService {
         select: { slug: true, plan: true }
     });
 
-    const activeStudents = await this.db.membership.count({
-      where: { organizationId: orgId, role: Role.STUDENT }
+    const memberships = await this.db.membership.findMany({
+      where: { organizationId: orgId, role: Role.STUDENT },
+      include: {
+        category: { select: { name: true } },
+        user: { select: { 
+            bookings: { where: { classSession: { organizationId: orgId } }, orderBy: { createdAt: 'desc' }, take: 1 }
+        }},
+        creditPackages: { orderBy: { createdAt: 'desc' } }
+      }
     });
+
+    let activeStudentsCount = 0;
+    const categoryCounts: Record<string, number> = { 'General': 0 };
+
+    memberships.forEach(m => {
+        let isActuallyActive = false;
+
+        if (m.status === 'ACTIVE') {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            let lastActivity = m.joinedAt;
+
+            if (m.creditPackages.length > 0) lastActivity = new Date(m.creditPackages[0].createdAt);
+            if (m.user.bookings.length > 0) {
+                const lastBooking = new Date(m.user.bookings[0].createdAt);
+                if (lastBooking > lastActivity) lastActivity = lastBooking;
+            }
+
+            if (lastActivity >= thirtyDaysAgo) isActuallyActive = true;
+        }
+
+        if (isActuallyActive) {
+            activeStudentsCount++;
+            
+            const catName = m.category?.name || 'General';
+            categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
+        }
+    });
+
+    const categoriesStats = Object.entries(categoryCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count);
 
     let maxStudents = 0; 
     let isPro = false;
@@ -80,11 +119,7 @@ export class DashboardService {
     }
 
     const classesToday = await this.db.classSession.count({
-      where: {
-        organizationId: orgId,
-        startTime: { gte: today, lt: tomorrow },
-        isCancelled: false
-      }
+      where: { organizationId: orgId, startTime: { gte: today, lt: tomorrow }, isCancelled: false }
     });
 
     const nextWeek = new Date();
@@ -93,10 +128,7 @@ export class DashboardService {
     const expiringPacks = await this.db.creditPackage.count({
       where: {
         membership: { organizationId: orgId },
-        expiresAt: {
-          gte: new Date(),
-          lte: nextWeek
-        },
+        expiresAt: { gte: new Date(), lte: nextWeek },
         remainingAmount: { gt: 0 }
       }
     });
@@ -104,7 +136,9 @@ export class DashboardService {
     return {
       role: 'OWNER',
       cards: {
-        activeStudents,
+        totalRegistered: memberships.length,
+        activeStudents: activeStudentsCount,
+        categoriesStats,
         maxStudents,
         isPro,
         classesToday,

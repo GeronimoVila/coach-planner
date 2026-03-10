@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Get, Delete, Param } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Delete, Param, Query } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -29,10 +29,14 @@ export class BookingsController {
 
   @Get('history')
   @Roles(Role.STUDENT)
-  getHistory(@Request() req) {
+  getHistory(
+    @Request() req,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10'
+  ) {
     const userId = req.user.id || req.user.userId;
     const orgId = req.user.orgId || req.user.organizationId;
-    return this.bookingsService.getStudentHistory(userId, orgId);
+    return this.bookingsService.getStudentHistory(userId, orgId, Number(page), Number(limit));
   }
 
   @Delete(':classId')

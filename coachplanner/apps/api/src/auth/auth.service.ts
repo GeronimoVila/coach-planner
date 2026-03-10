@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, InternalServerErrorException, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from 'src/database/database.service';
@@ -29,6 +29,10 @@ export class AuthService {
         organizationsOwned: true
       }
     });
+
+    if (user && user.deletedAt) {
+        throw new UnauthorizedException('Esta cuenta ha sido desactivada por un administrador.');
+    }
 
     if (!user) {
       if (action === 'login') {
@@ -92,7 +96,8 @@ export class AuthService {
         userId,
         '¡Bienvenido! 👋',
         `Te has unido exitosamente a ${org.name}.`,
-        'SUCCESS'
+        'SUCCESS',
+        org.id
     );
 
     try {
@@ -118,8 +123,8 @@ export class AuthService {
       where: { verificationToken: token }
     });
 
-    if (!user) {
-        throw new NotFoundException('Token de verificación inválido o expirado.');
+    if (!user || user.deletedAt) {
+        throw new NotFoundException('Token de verificación inválido o cuenta desactivada.');
     }
 
     await this.db.user.update({
@@ -205,6 +210,74 @@ export class AuthService {
     }
   }
 
+  async registerInvited(dto: any) {
+    const invitation = await this.db.invitation.findUnique({ where: { token: dto.token } });
+    
+    if (!invitation || invitation.status !== 'PENDING') {
+      throw new BadRequestException('Invitación inválida');
+    }
+
+    const existingUser = await this.db.user.findUnique({ where: { email: invitation.email } });
+    if (existingUser) {
+      throw new BadRequestException('El usuario ya existe. Por favor inicia sesión.');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(dto.password, salt);
+
+    const result = await this.db.$transaction(async (tx) => {
+       const user = await tx.user.create({
+         data: {
+           email: invitation.email,
+           fullName: dto.fullName,
+           phoneNumber: dto.phoneNumber,
+           passwordHash: hashedPassword,
+           emailVerified: new Date(),
+           role: 'STUDENT',
+         }
+       });
+
+       await tx.membership.create({
+         data: {
+           userId: user.id,
+           organizationId: invitation.organizationId,
+           role: invitation.role,
+         }
+       });
+
+       await tx.invitation.update({
+         where: { id: invitation.id },
+         data: { status: 'ACCEPTED' }
+       });
+
+       return user;
+    });
+
+    const fullUser = await this.db.user.findUnique({
+      where: { id: result.id },
+      include: { memberships: true, organizationsOwned: true }
+    });
+
+    return this.generateJwt(fullUser, invitation.organizationId);
+  }
+
+  async getInvitationInfo(token: string) {
+    const invitation = await this.db.invitation.findUnique({
+      where: { token },
+      include: { organization: true }
+    });
+
+    if (!invitation || invitation.status !== 'PENDING' || invitation.expiresAt < new Date()) {
+      throw new BadRequestException('La invitación no es válida o ha expirado');
+    }
+
+    return {
+      email: invitation.email,
+      role: invitation.role,
+      gymName: invitation.organization.name
+    };
+  }
+
   async getGymInfo(slug: string) {
     const organization = await this.db.organization.findFirst({
       where: { 
@@ -275,6 +348,9 @@ export class AuthService {
         let verificationToken: string | null = null; 
 
         if (existingUser) {
+            if (existingUser.deletedAt) {
+                throw new UnauthorizedException('Esta cuenta se encuentra desactivada por la plataforma.');
+            }
             if (!existingUser.passwordHash) {
                 throw new ConflictException('El usuario ya existe pero no tiene contraseña configurada. Contacta soporte o entra con Google.');
             }
@@ -300,6 +376,7 @@ export class AuthService {
                 data: {
                     email: dto.email,
                     fullName: dto.name, 
+                    phoneNumber: dto.phoneNumber,
                     passwordHash: hashedPassword,
                     verificationToken: verificationToken,
                     emailVerified: null
@@ -334,11 +411,11 @@ export class AuthService {
           if (isNewUser) {
               if (token) await this.emailService.sendVerificationEmail(dto.email, token);
               await this.notifications.create(
-                  userId, '¡Bienvenido! 👋', `Gracias por registrarte. Verifica tu correo para continuar.`, 'INFO'
+                  userId, '¡Bienvenido! 👋', `Gracias por registrarte. Verifica tu correo para continuar.`, 'INFO', org.id
               );
           } else {
               await this.notifications.create(
-                  userId, 'Nueva Organización Agregado 🏋️', `Te has unido exitosamente a ${org.name}.`, 'SUCCESS'
+                  userId, 'Nuevo Gimnasio Agregado 🏋️', `Te has unido exitosamente a ${org.name}.`, 'SUCCESS', org.id
               );
           }
           
@@ -362,6 +439,9 @@ export class AuthService {
     
     if (!user) {
       throw new UnauthorizedException('Credenciales inválidas');
+    }
+    if (user.deletedAt) {
+      throw new UnauthorizedException('Esta cuenta ha sido desactivada por un administrador.');
     }
     if (!user.passwordHash) {
       throw new UnauthorizedException('Tu cuenta está vinculada a Google. Por favor, inicia sesión con Google.');
@@ -387,6 +467,9 @@ export class AuthService {
 
     if (!user) {
       throw new NotFoundException('Usuario no encontrado');
+    }
+    if (user.deletedAt) {
+      throw new UnauthorizedException('No puedes suplantar a un usuario desactivado.');
     }
 
     return this.generateJwt(user);
@@ -415,32 +498,92 @@ export class AuthService {
     };
   }
 
-  private generateJwt(user: any) {
+  async getMyGyms(userId: string) {
+    const ownedOrgs = await this.db.organization.findMany({
+      where: { ownerId: userId },
+      select: { id: true, name: true, slug: true }
+    });
+
+    const memberships = await this.db.membership.findMany({
+      where: { userId },
+      include: { organization: { select: { id: true, name: true, slug: true } } }
+    });
+
+    const memberOrgs = memberships.map(m => m.organization);
+
+    const allOrgs = [...ownedOrgs, ...memberOrgs];
+    const uniqueOrgs = Array.from(new Map(allOrgs.map(org => [org.id, org])).values());
+
+    return uniqueOrgs;
+  }
+
+  async switchGym(userId: string, targetOrgId: string) {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      include: { 
+        memberships: true,
+        organizationsOwned: true 
+      }
+    });
+
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    if (user.deletedAt) throw new UnauthorizedException('Cuenta desactivada');
+
+    const isOwner = user.organizationsOwned.some(org => org.id === targetOrgId);
+    const membership = user.memberships.find(m => m.organizationId === targetOrgId);
+
+    if (!isOwner && !membership) {
+      throw new ForbiddenException('No perteneces a esta organización');
+    }
+
+    return this.generateJwt(user, targetOrgId);
+  }
+
+  private generateJwt(user: any, targetOrgId?: string) {
     let primaryRole: Role = Role.STUDENT; 
     let orgId: string | null = null; 
     let categoryId: number | null = null;
     let plan: string = 'FREE'; 
 
-    if (user.role === Role.ADMIN) {
-        primaryRole = Role.ADMIN;
-        if (user.organizationsOwned && user.organizationsOwned.length > 0) {
-            orgId = user.organizationsOwned[0].id;
-            plan = user.organizationsOwned[0].plan || 'FREE';
+    if (targetOrgId) {
+        const ownedOrg = user.organizationsOwned?.find((o: any) => o.id === targetOrgId);
+        const membership = user.memberships?.find((m: any) => m.organizationId === targetOrgId);
+
+        if (user.role === Role.ADMIN) {
+            primaryRole = Role.ADMIN;
+            orgId = targetOrgId;
+        } else if (ownedOrg) {
+            primaryRole = Role.OWNER;
+            orgId = ownedOrg.id;
+            plan = ownedOrg.plan || 'FREE';
+            if (!ownedOrg.isActive) throw new UnauthorizedException('Tu gimnasio ha sido suspendido.');
+        } else if (membership) {
+            primaryRole = membership.role;
+            orgId = membership.organizationId;
+            categoryId = membership.categoryId;
         }
-    } 
-    else if (user.organizationsOwned && user.organizationsOwned.length > 0) {
-      primaryRole = Role.OWNER;
-      orgId = user.organizationsOwned[0].id;
-      plan = user.organizationsOwned[0].plan || 'FREE';
-      
-      const ownedOrg = user.organizationsOwned[0];
-      if (ownedOrg && !ownedOrg.isActive) {
-        throw new UnauthorizedException('Tu gimnasio ha sido suspendido. Contacta a soporte.');
-      }
-    } else if (user.memberships && user.memberships.length > 0) {
-      primaryRole = user.memberships[0].role;
-      orgId = user.memberships[0].organizationId;
-      categoryId = user.memberships[0].categoryId;
+    } else {
+        if (user.role === Role.ADMIN) {
+            primaryRole = Role.ADMIN;
+            if (user.organizationsOwned && user.organizationsOwned.length > 0) {
+                orgId = user.organizationsOwned[0].id;
+                plan = user.organizationsOwned[0].plan || 'FREE';
+            }
+        } 
+        else if (user.organizationsOwned && user.organizationsOwned.length > 0) {
+          primaryRole = Role.OWNER;
+          orgId = user.organizationsOwned[0].id;
+          plan = user.organizationsOwned[0].plan || 'FREE';
+          
+          const ownedOrg = user.organizationsOwned[0];
+          if (ownedOrg && !ownedOrg.isActive) {
+            throw new UnauthorizedException('Tu gimnasio ha sido suspendido. Contacta a soporte.');
+          }
+        } else if (user.memberships && user.memberships.length > 0) {
+          primaryRole = user.memberships[0].role;
+          orgId = user.memberships[0].organizationId;
+          categoryId = user.memberships[0].categoryId;
+        }
     }
 
     const payload = { 
@@ -451,7 +594,8 @@ export class AuthService {
       categoryId: categoryId,
       plan: plan,
       fullName: user.fullName,
-      avatarUrl: user.avatarUrl
+      avatarUrl: user.avatarUrl,
+      phoneNumber: user.phoneNumber
     };
     
     return {
@@ -461,6 +605,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: user.avatarUrl,
+        phoneNumber: user.phoneNumber,
         role: primaryRole,
         organizationId: orgId,
         categoryId: categoryId,
@@ -475,7 +620,8 @@ export class AuthService {
             email: {
                 equals: email.toLowerCase().trim(),
                 mode: 'insensitive'
-            } 
+            },
+            deletedAt: null
         } 
     });
 
@@ -521,8 +667,8 @@ export class AuthService {
         where: { resetPasswordToken: token }
     });
 
-    if (!user) {
-        console.error("❌ [AuthService] Token no encontrado en la base de datos.");
+    if (!user || user.deletedAt) {
+        console.error("❌ [AuthService] Token no encontrado o usuario borrado.");
         throw new BadRequestException('El enlace es inválido o ya ha sido utilizado.');
     }
 
@@ -555,7 +701,7 @@ export class AuthService {
       }
     });
 
-    if (!user) throw new UnauthorizedException('Usuario no encontrado');
+    if (!user || user.deletedAt) throw new UnauthorizedException('Usuario no encontrado o desactivado');
 
     return this.generateJwt(user);
   }

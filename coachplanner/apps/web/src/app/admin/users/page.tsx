@@ -15,6 +15,7 @@ interface User {
   email: string;
   role: 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | 'OWNER';
   createdAt: string;
+  isDeleted: boolean;
   _count: {
     memberships: number;
     instructedClasses: number;
@@ -96,20 +97,23 @@ export default function AdminUsersPage() {
                   <tr>
                     <th className="px-6 py-3">Usuario</th>
                     <th className="px-6 py-3">Rol</th>
+                    <th className="px-6 py-3">Estado</th>
                     <th className="px-6 py-3">Detalles</th>
                     <th className="px-6 py-3">Fecha Registro</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((user) => (
-                    <tr key={user.id} className="border-b bg-white hover:bg-gray-50">
+                    <tr key={user.id} className={`border-b hover:bg-gray-50 transition-colors ${user.isDeleted ? 'bg-red-50/20 opacity-80' : 'bg-white'}`}>
                       <td className="px-6 py-4">
                         <Link href={`/admin/users/${user.id}`} className="group flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                          <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-colors ${user.isDeleted ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600'}`}>
                             {user.role === 'ADMIN' ? <Shield className="h-4 w-4" /> : <UserIcon className="h-4 w-4" />}
                           </div>
                           <div>
-                            <div className="font-medium text-gray-900 group-hover:text-blue-600 group-hover:underline">{user.fullName || 'Sin nombre'}</div>
+                            <div className="font-medium text-gray-900 group-hover:text-blue-600 group-hover:underline">
+                              {user.fullName || 'Sin nombre'}
+                            </div>
                             <div className="text-xs text-gray-500 flex items-center gap-1">
                               <Mail className="h-3 w-3" /> {user.email}
                             </div>
@@ -119,6 +123,19 @@ export default function AdminUsersPage() {
                       <td className="px-6 py-4">
                         {getRoleBadge(user.role)}
                       </td>
+                      
+                      <td className="px-6 py-4">
+                        {user.isDeleted ? (
+                            <Badge variant="outline" className="border-red-200 text-red-600 bg-red-50">
+                                Desactivado
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">
+                                Activo
+                            </Badge>
+                        )}
+                      </td>
+
                       <td className="px-6 py-4 text-gray-500 text-xs">
                         {user.role === 'OWNER' && <div>Gyms: {user._count.organizationsOwned}</div>}
                         {user.role === 'INSTRUCTOR' && <div>Clases: {user._count.instructedClasses}</div>}

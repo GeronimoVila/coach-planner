@@ -12,17 +12,20 @@ import { toast } from 'sonner';
 import { 
   Loader2, ArrowLeft, Search, UserPlus, Mail, Calendar, User as UserIcon, CreditCard, Plus, Tag
 } from 'lucide-react';
+import Link from 'next/link';
 
 interface Student {
   id: string;
   membershipId: string;
   fullName: string | null;
   email: string;
+  phoneNumber?: string | null;
   joinedAt: string;
   role: string;
   credits: number;
   categoryName?: string;
   categoryId?: number | null;
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 }
 
 interface Category {
@@ -38,6 +41,9 @@ export default function StudentsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [creditFilter, setCreditFilter] = useState<'ALL' | 'WITH_CREDITS' | 'NO_CREDITS'>('ALL');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
@@ -137,10 +143,19 @@ export default function StudentsPage() {
       setIsCreditModalOpen(true);
     };
   
-    const filteredStudents = students.filter(s => 
-      (s.fullName?.toLowerCase() || '').includes(search.toLowerCase()) ||
-      s.email.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredStudents = students.filter(s => {
+      const matchesSearch = (s.fullName?.toLowerCase() || '').includes(search.toLowerCase()) ||
+                            s.email.toLowerCase().includes(search.toLowerCase()) ||
+                            (s.phoneNumber || '').includes(search);
+      if (!matchesSearch) return false;
+      if (statusFilter === 'ACTIVE' && s.status !== 'ACTIVE') return false;
+      if (statusFilter === 'INACTIVE' && s.status === 'ACTIVE') return false;
+      if (categoryFilter !== 'ALL' && s.categoryId?.toString() !== categoryFilter) return false;
+      if (creditFilter === 'WITH_CREDITS' && s.credits <= 0) return false;
+      if (creditFilter === 'NO_CREDITS' && s.credits > 0) return false;
+      
+      return true;
+    });
 
   if (authLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
 
@@ -157,87 +172,172 @@ export default function StudentsPage() {
             <p className="text-muted-foreground text-sm">Gestiona los miembros de tu gimnasio</p>
           </div>
         </div>
+        <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm w-full sm:w-auto">
+          <UserPlus className="mr-2 h-4 w-4" /> Registrar Alumno
+        </Button>
       </div>
 
-      <div className="max-w-6xl mx-auto w-full space-y-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Buscar por nombre o correo..." 
-              className="pl-10 bg-white"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      <div className="max-w-6xl mx-auto w-full space-y-4">
+          
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+              <div className="relative w-full md:w-96">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar por nombre, correo o teléfono" 
+                  className="pl-10 bg-white shadow-sm"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="flex bg-gray-200/60 p-1 rounded-lg w-full md:w-auto overflow-x-auto shrink-0">
+                  <button 
+                    onClick={() => setStatusFilter('ALL')}
+                    className={`flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${statusFilter === 'ALL' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                      Todos
+                  </button>
+                  <button 
+                    onClick={() => setStatusFilter('ACTIVE')}
+                    className={`flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${statusFilter === 'ACTIVE' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                      Activos
+                  </button>
+                  <button 
+                    onClick={() => setStatusFilter('INACTIVE')}
+                    className={`flex-1 md:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap ${statusFilter === 'INACTIVE' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                      Inactivos
+                  </button>
+              </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 mb-2">
+              <div className="relative w-full sm:w-64">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select 
+                    className="w-full h-10 rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-sm appearance-none"
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                >
+                    <option value="ALL">Todas las Categorías</option>
+                    {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select 
+                    className="w-full h-10 rounded-md border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-sm appearance-none"
+                    value={creditFilter}
+                    onChange={(e) => setCreditFilter(e.target.value as 'ALL' | 'WITH_CREDITS' | 'NO_CREDITS')}
+                >
+                    <option value="ALL">Todos los créditos</option>
+                    <option value="WITH_CREDITS">Tienen clases disponibles</option>
+                    <option value="NO_CREDITS">Sin clases (0)</option>
+                </select>
+              </div>
           </div>
 
         {loading ? (
             <div className="text-center py-12"><Loader2 className="animate-spin mx-auto h-8 w-8 text-primary" /></div>
         ) : (
-             <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-             <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-               <div className="col-span-4">Alumno</div>
-               <div className="col-span-3">Categoría</div>
-               <div className="col-span-2 text-center">Créditos</div>
-               <div className="col-span-2 text-right">Fecha Ingreso</div>
-               <div className="col-span-1 text-center">Acciones</div>
-             </div>
- 
-             <div className="divide-y">
-               {filteredStudents.map((student) => (
-                 <div key={student.membershipId} className="p-4 md:grid md:grid-cols-12 md:gap-4 md:items-center hover:bg-gray-50 transition-colors">
-                   
-                   <div className="col-span-4 flex items-center gap-3 mb-2 md:mb-0">
-                     <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
-                       {student.fullName?.[0]?.toUpperCase() || student.email[0].toUpperCase()}
-                     </div>
-                     <div>
-                       <p className="font-medium text-gray-900">{student.fullName || 'Sin nombre'}</p>
-                       <div className="flex flex-col md:hidden">
-                           <span className="text-xs text-gray-500 mt-0.5">{student.email}</span>
-                       </div>
-                     </div>
-                   </div>
- 
-                   <div className="col-span-3 mb-2 md:mb-0">
-                       <select 
-                           className="w-full md:w-[90%] h-8 rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                           value={student.categoryId || ""}
-                           onChange={(e) => handleCategoryChange(student.id, e.target.value)}
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div className="hidden md:grid grid-cols-12 gap-4 p-4 border-b bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider items-center">
+              <div className="col-span-4">Alumno</div>
+              <div className="col-span-3">Categoría</div>
+              <div className="col-span-2 text-center">Créditos</div>
+              <div className="col-span-2 text-center">Fecha Ingreso</div>
+              <div className="col-span-1 text-right">Acciones</div>
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {filteredStudents.length === 0 ? (
+                <div className="p-12 text-center text-gray-500 flex flex-col items-center justify-center">
+                  <UserIcon className="h-10 w-10 text-gray-300 mb-3" />
+                  No se encontraron alumnos con esos filtros.
+                </div>
+              ) : (
+                filteredStudents.map((student) => (
+                  <div key={student.membershipId} className={`p-4 flex flex-col md:grid md:grid-cols-12 gap-4 items-start md:items-center transition-colors ${student.status === 'SUSPENDED' ? 'bg-red-50/30' : 'hover:bg-gray-50/50'}`}>
+                    
+                    <div className="col-span-4 flex items-center gap-3 w-full min-w-0 relative">
+                      <div className={`absolute -left-4 top-0 bottom-0 w-1 md:hidden ${student.status === 'ACTIVE' ? 'bg-green-500' : 'bg-red-500'}`} />
+                      
+                      <Link href={`/students/${student.id}`} className={`h-10 w-10... `}>
+                        {student.fullName?.[0]?.toUpperCase() || student.email[0].toUpperCase()}
+                      </Link>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                            <Link href={`/students/${student.id}`} className="font-medium...">
+                              {student.fullName?.replace('undefined', '').trim() || 'Sin nombre'}
+                            </Link>
+                            {student.status === 'ACTIVE' ? (
+                                <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 uppercase tracking-wider">Activo</span>
+                            ) : (
+                                <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">Inactivo</span>
+                            )}
+                        </div>
+                        
+                        <div className="flex flex-col md:hidden mt-0.5">
+                            <span className="text-xs text-gray-500 truncate">{student.email}</span>
+                            <span className="text-xs text-gray-500 truncate">{student.phoneNumber || 'Sin teléfono'}</span>
+                            <span className={`w-fit mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${student.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {student.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
+                            </span>
+                        </div>
+                        
+                        <div className="hidden md:flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-gray-500 truncate">{student.email}</span>
+                            <span className="text-xs text-gray-300">•</span>
+                            <span className="text-xs text-gray-500 truncate">{student.phoneNumber || 'Sin teléfono'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-span-3 w-full">
+                        <select 
+                            className="w-full h-9 rounded-md border border-gray-200 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 shadow-sm"
+                            value={student.categoryId || ""}
+                            onChange={(e) => handleCategoryChange(student.id, e.target.value)}
+                        >
+                            <option value="">General (Todas)</option>
+                            {categories.map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="col-span-2 w-full flex items-center justify-start md:justify-center">
+                      <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${student.credits > 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                          {student.credits} Clases
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 w-full hidden md:block text-center text-sm text-gray-500">
+                      {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
+                    </div>
+
+                    <div className="col-span-1 w-full flex justify-end">
+                       <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full md:w-auto gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                          onClick={() => openCreditModal(student)}
                        >
-                           <option value="">General (Todas)</option>
-                           {categories.map(cat => (
-                               <option key={cat.id} value={cat.id}>{cat.name}</option>
-                           ))}
-                       </select>
-                   </div>
- 
-                   <div className="col-span-2 flex items-center justify-start md:justify-center mb-2 md:mb-0">
-                     <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${student.credits > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                         {student.credits} Clases
-                     </div>
-                   </div>
- 
-                   <div className="col-span-2 text-right hidden md:block text-sm text-gray-500">
-                     {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
-                   </div>
- 
-                   <div className="col-span-1 flex justify-end md:justify-center mt-2 md:mt-0">
-                      <Button 
-                         size="sm" 
-                         variant="outline" 
-                         className="h-8 w-8 p-0 md:h-9 md:w-auto md:px-3 gap-2"
-                         onClick={() => openCreditModal(student)}
-                         title="Asignar Pack de Clases"
-                      >
-                         <CreditCard className="h-4 w-4" />
-                         <span className="hidden md:inline">Cargar</span>
-                      </Button>
-                   </div>
- 
-                 </div>
-               ))}
-             </div>
-           </div>
+                          <span className="md:hidden">Cargar Créditos</span>
+                          <span className="hidden md:inline">Cargar</span>
+                       </Button>
+                    </div>
+
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         )}
       </div>
 
@@ -276,7 +376,7 @@ export default function StudentsPage() {
                   <div className="relative">
                     <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                     <select
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pl-9 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pl-9 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       value={formData.categoryId}
                       onChange={e => setFormData({...formData, categoryId: e.target.value})}
                     >
@@ -286,9 +386,6 @@ export default function StudentsPage() {
                       ))}
                     </select>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    El alumno solo podrá reservar clases de esta categoría.
-                  </p>
                 </div>
 
                 <div className="pt-4 flex gap-3">

@@ -1,15 +1,20 @@
-import { IsEmail, IsNotEmpty, MinLength, IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, IsNumber } from 'class-validator';
 
 export class RegisterStudentDto {
-  @IsNotEmpty()
   @IsString()
+  @IsNotEmpty()
   name: string;
 
   @IsEmail()
   email: string;
 
-  @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres' })
+  @IsString()
+  @MinLength(8)
   password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  phoneNumber: string;
 
   @IsOptional()
   @IsNumber()

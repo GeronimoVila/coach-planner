@@ -25,8 +25,8 @@ interface ClassSession {
   isFull: boolean;
   isBookedByMe: boolean;
   instructorName: string;
-  categoryName: string;
-  categoryId: number;
+  categoryNames: string[];
+  categoryIds: number[];
 }
 
 const getStartOfWeek = (date: Date) => {
@@ -148,7 +148,9 @@ export default function StudentBookingPage() {
   const getClassStatus = (session: ClassSession) => {
       if (session.isBookedByMe) return 'booked';
       
-      if (myCategoryId && session.categoryId && session.categoryId !== myCategoryId) return 'wrong_category';
+      if (myCategoryId && session.categoryIds?.length > 0 && !session.categoryIds.includes(myCategoryId)) {
+          return 'wrong_category';
+      }
 
       if (session.isFull) return 'full';
 
@@ -157,7 +159,8 @@ export default function StudentBookingPage() {
 
   const getCardStyle = (session: ClassSession) => {
       const status = getClassStatus(session);
-      const borderColor = getCategoryBorderColor(session.categoryId);
+      const primaryCategoryId = session.categoryIds?.[0] || null;
+      const borderColor = getCategoryBorderColor(primaryCategoryId);
 
       switch (status) {
           case 'booked':
@@ -176,7 +179,7 @@ export default function StudentBookingPage() {
     const status = getClassStatus(session);
     
     if (status === 'wrong_category') {
-        toast.error('Esta clase no pertenece a tu categoría.');
+        toast.error('Esta clase no pertenece a tu disciplina.');
         return;
     }
     if (status === 'full') {
@@ -348,7 +351,7 @@ export default function StudentBookingPage() {
                     </div>
                     {weekDays.map((day, i) => {
                       const activeClass = getClassInSlot(day, minutes);
-                      
+                      const displayCategoryNames = activeClass?.categoryNames?.join(', ') || 'General';
                       return (
                         <div 
                           key={i} 
@@ -366,7 +369,7 @@ export default function StudentBookingPage() {
 
                               <div>
                                 <h3 className="font-bold text-sm truncate pr-4">{activeClass.title}</h3>
-                                <p className="text-[11px] opacity-80 truncate">{activeClass.instructorName}</p>
+                                <p className="text-[11px] opacity-80 truncate" title={displayCategoryNames}>{displayCategoryNames}</p>
                               </div>
                               <div className="flex justify-between items-end mt-2">
                                 <div className="flex items-center text-xs font-medium gap-1">
@@ -403,6 +406,8 @@ export default function StudentBookingPage() {
              const activeClass = getClassInSlot(selectedDate, minutes);
              if (!activeClass) return null; 
 
+             const displayCategoryNames = activeClass?.categoryNames?.join(', ') || 'General';
+
              return (
                <div key={minutes} className="flex gap-4" onClick={() => handleClassClick(activeClass)}>
                  <div className="w-12 text-right text-xs font-medium text-gray-500 pt-2">
@@ -412,13 +417,13 @@ export default function StudentBookingPage() {
                  <div className="flex-1">
                     <div className={`rounded-xl p-4 shadow-sm flex flex-col gap-2 relative ${getCardStyle(activeClass).replace('border-l-4', 'border-l-[6px]')}`}>
                       <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-bold text-lg">{activeClass.title}</h3>
-                          <p className="text-sm opacity-80">{activeClass.instructorName}</p>
-                          <p className="text-xs opacity-60 mt-1">{activeClass.categoryName}</p>
+                        <div className="overflow-hidden pr-4">
+                          <h3 className="font-bold text-lg truncate">{activeClass.title}</h3>
+                          <p className="text-sm opacity-80 truncate">{activeClass.instructorName}</p>
+                          <p className="text-xs opacity-60 mt-1 truncate" title={displayCategoryNames}>{displayCategoryNames}</p>
                         </div>
-                        {activeClass.isBookedByMe && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-                        {activeClass.isFull && !activeClass.isBookedByMe && <Ban className="h-5 w-5 text-red-600" />}
+                        {activeClass.isBookedByMe && <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />}
+                        {activeClass.isFull && !activeClass.isBookedByMe && <Ban className="h-5 w-5 text-red-600 shrink-0" />}
                       </div>
 
                       <div className="flex justify-between items-center mt-2">

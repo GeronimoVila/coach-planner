@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateClassDto } from './dto/create-class.dto';
+import { UpdateClassDto } from './dto/update-class.dto';
 import { DatabaseService } from 'src/database/database.service';
 import { BookingStatus } from '@repo/database';
 import { CloneWeekDto } from './dto/clone-week.dto';
@@ -28,23 +29,92 @@ export class ClassesService {
       throw new BadRequestException('No puedes crear una clase en el pasado');
     }
 
-    if (createClassDto.categoryId) {
-        const category = await this.db.category.findUnique({
-          where: { id: createClassDto.categoryId },
+    if (createClassDto.categoryIds && createClassDto.categoryIds.length > 0) {
+        const validCategories = await this.db.category.count({
+          where: { 
+              id: { in: createClassDto.categoryIds },
+              organizationId: orgId 
+          }
         });
 
-        if (!category || category.organizationId !== orgId) {
-          throw new BadRequestException('La categoría seleccionada no es válida');
+        if (validCategories !== createClassDto.categoryIds.length) {
+          throw new BadRequestException('Una o más categorías seleccionadas no son válidas');
         }
     }
 
     return this.db.classSession.create({
       data: {
-        ...createClassDto,
+        title: createClassDto.title,
+        description: createClassDto.description,
+        startTime: createClassDto.startTime,
+        endTime: createClassDto.endTime,
+        capacity: createClassDto.capacity,
         organizationId: orgId,
         instructorId: instructorId,
-
+        categories: {
+            create: createClassDto.categoryIds?.map(id => ({
+                categoryId: id
+            })) || []
+        }
       },
+    });
+  }
+
+  async update(id: string, updateClassDto: UpdateClassDto, orgId: string) {
+    const classSession = await this.db.classSession.findUnique({
+      where: { id, organizationId: orgId },
+      include: { 
+          bookings: { where: { status: BookingStatus.CONFIRMED } },
+          categories: true
+      }
+    });
+
+    if (!classSession) throw new NotFoundException('Clase no encontrada');
+
+    const hasBookings = classSession.bookings.length > 0;
+
+    if (hasBookings) {
+        if (updateClassDto.startTime || updateClassDto.endTime) {
+            const newStart = updateClassDto.startTime ? new Date(updateClassDto.startTime).getTime() : classSession.startTime.getTime();
+            const newEnd = updateClassDto.endTime ? new Date(updateClassDto.endTime).getTime() : classSession.endTime.getTime();
+            
+            if (newStart !== classSession.startTime.getTime() || newEnd !== classSession.endTime.getTime()) {
+                throw new BadRequestException('No puedes cambiar el horario de una clase que ya tiene alumnos inscritos. Cancélala y crea una nueva.');
+            }
+        }
+
+        if (updateClassDto.capacity !== undefined && updateClassDto.capacity < classSession.bookings.length) {
+            throw new BadRequestException(`No puedes reducir el cupo a menos de ${classSession.bookings.length} (cantidad actual de inscritos)`);
+        }
+
+        if (updateClassDto.categoryIds) {
+            const currentCatIds = classSession.categories.map(c => c.categoryId);
+            const missingCats = currentCatIds.filter(id => !updateClassDto.categoryIds!.includes(id));
+            if (missingCats.length > 0) {
+                throw new BadRequestException('No puedes eliminar disciplinas de esta clase porque ya hay alumnos inscritos. Solo puedes agregar nuevas.');
+            }
+        }
+    }
+
+    const updateData: any = {
+        title: updateClassDto.title,
+        description: updateClassDto.description,
+        capacity: updateClassDto.capacity
+    };
+
+    if (updateClassDto.startTime) updateData.startTime = updateClassDto.startTime;
+    if (updateClassDto.endTime) updateData.endTime = updateClassDto.endTime;
+
+    if (updateClassDto.categoryIds) {
+        updateData.categories = {
+            deleteMany: {},
+            create: updateClassDto.categoryIds.map(catId => ({ categoryId: catId }))
+        };
+    }
+
+    return this.db.classSession.update({
+      where: { id },
+      data: updateData
     });
   }
 
@@ -55,7 +125,10 @@ export class ClassesService {
     }
     return this.db.classSession.findMany({
       where: whereClause,
-      include: { category: true, _count: { select: { bookings: true } } },
+      include: { 
+          categories: { include: { category: true } }, 
+          _count: { select: { bookings: true } } 
+      },
       orderBy: { startTime: 'asc' },
     });
   }
@@ -64,11 +137,18 @@ export class ClassesService {
     const classSession = await this.db.classSession.findUnique({
       where: { id },
       include: { 
-        category: true,
+        categories: { include: { category: true } },
         bookings: {
           where: { status: BookingStatus.CONFIRMED }, 
           include: { 
-             user: true
+             user: {
+               include: {
+                 memberships: {
+                   where: { organizationId: orgId },
+                   include: { category: true }
+                 }
+               }
+             }
           }
         }
       }
@@ -101,7 +181,7 @@ export class ClassesService {
       },
       include: {
         instructor: { select: { fullName: true } },
-        category: { select: { name: true } },
+        categories: { include: { category: { select: { id: true, name: true } } } },
         bookings: {
           where: { status: BookingStatus.CONFIRMED },
           select: { userId: true }
@@ -112,8 +192,9 @@ export class ClassesService {
 
     return classes.map((cls) => {
       const isBookedByMe = cls.bookings.some(b => b.userId === userId);
-      
       const bookedCount = cls.bookings.length;
+      const categoryNames = cls.categories.map(c => c.category.name);
+      const categoryIds = cls.categories.map(c => c.category.id);
 
       return {
         id: cls.id,
@@ -122,8 +203,8 @@ export class ClassesService {
         startTime: cls.startTime,
         endTime: cls.endTime,
         instructorName: cls.instructor.fullName,
-        categoryName: cls.category?.name || 'General',
-        categoryId: cls.categoryId,
+        categoryNames: categoryNames.length > 0 ? categoryNames : ['General'],
+        categoryIds: categoryIds,
         capacity: cls.capacity,
         bookedCount: bookedCount,
         isFull: bookedCount >= cls.capacity,
@@ -199,9 +280,10 @@ export class ClassesService {
       const promises = transactionResult.session.bookings.map(async (booking) => {
         await this.notifications.create(
           booking.userId,
-          'Clase Cancelada',
+          'Clase Cancelada ❌',
           notifMessage,
-          'WARNING'
+          'WARNING',
+          orgId
         );
 
         try {
@@ -224,7 +306,6 @@ export class ClassesService {
   }
 
   async cloneWeek(orgId: string, dto: CloneWeekDto) {
-
     await this.plansService.validateCreateClass(orgId, 1);
 
     return this.db.$transaction(async (tx) => {
@@ -246,6 +327,9 @@ export class ClassesService {
           },
           isCancelled: false,
         },
+        include: {
+           categories: true
+        }
       });
 
       if (sourceClasses.length === 0) {
@@ -264,7 +348,7 @@ export class ClassesService {
       });
 
       const timeDiff = targetStart.getTime() - sourceStart.getTime();
-      const classesToCreate: any[] = [];
+      let createdCount = 0;
       let skippedCount = 0;
 
       for (const cls of sourceClasses) {
@@ -280,29 +364,22 @@ export class ClassesService {
           continue;
         }
 
-        classesToCreate.push({
-          organizationId: orgId,
-          title: cls.title,
-          description: cls.description,
-          startTime: newStartTime,
-          endTime: newEndTime,
-          capacity: cls.capacity,
-          categoryId: cls.categoryId,
-          instructorId: cls.instructorId,
-          isCancelled: false,
+        await tx.classSession.create({
+          data: {
+            organizationId: orgId,
+            title: cls.title,
+            description: cls.description,
+            startTime: newStartTime,
+            endTime: newEndTime,
+            capacity: cls.capacity,
+            instructorId: cls.instructorId,
+            isCancelled: false,
+            categories: {
+                create: cls.categories.map(c => ({ categoryId: c.categoryId }))
+            }
+          }
         });
-      }
-
-      if (classesToCreate.length > 0) {
-         await this.plansService.validateCreateClass(orgId, classesToCreate.length);
-      }
-
-      let createdCount = 0;
-      if (classesToCreate.length > 0) {
-        const result = await tx.classSession.createMany({
-          data: classesToCreate,
-        });
-        createdCount = result.count;
+        createdCount++;
       }
 
       let message = `Se clonaron ${createdCount} clases exitosamente.`;

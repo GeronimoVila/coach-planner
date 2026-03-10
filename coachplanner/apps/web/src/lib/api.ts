@@ -52,6 +52,12 @@ axiosInstance.interceptors.response.use(
 );
 
 const students = {
+  getMe: async (token?: string) => {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    const { data } = await axiosInstance.get('/students/me', config);
+    return data;
+  },
+    
   getAvailableCategories: async (token?: string) => {
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     const { data } = await axiosInstance.get('/students/me/available-categories', config);
@@ -62,6 +68,12 @@ const students = {
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     const { data } = await axiosInstance.patch('/students/me/category', { categoryId }, config);
     return data;
+  },
+
+  updatePhone: async (token: string, phoneNumber: string) => {
+    const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    const { data } = await axiosInstance.patch('/students/me/phone', { phoneNumber }, config);
+    return data;
   }
 };
 
@@ -70,10 +82,41 @@ const auth = {
     const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
     const { data } = await axiosInstance.get('/auth/refresh', config);
     return data;
-  }
+  },
+
+  registerInvited: async (data: any) => {
+    const res = await axiosInstance.post('/auth/register-invited', data);
+    return res.data;
+  },
+  
+  getInvitationInfo: (token: string) => 
+    axiosInstance.get(`/auth/invitations/info/${token}`),
+};
+
+const organizations = {
+  updateConfig: (data: any) => axiosInstance.patch('/organizations/config', data),
+  
+  inviteStaff: (id: string, email: string, role: string) => 
+    axiosInstance.post(`/organizations/${id}/invitations`, { email, role }),
+  
+  getInvitations: (id: string) => 
+    axiosInstance.get(`/organizations/${id}/invitations`),
+    
+  revokeInvitation: (orgId: string, invitationId: string) => 
+    axiosInstance.delete(`/organizations/${orgId}/invitations/${invitationId}`),
+    
+  acceptInvitation: (token: string) => 
+    axiosInstance.post(`/organizations/invitations/accept`, { token }),
+
+  getStaff: (orgId: string) => 
+    axiosInstance.get(`/organizations/${orgId}/staff`),
+    
+  removeStaff: (orgId: string, userId: string) => 
+    axiosInstance.delete(`/organizations/${orgId}/staff/${userId}`),
 };
 
 export const api = Object.assign(axiosInstance, {
   students,
-  auth
+  auth,
+  organizations
 });

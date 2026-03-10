@@ -24,6 +24,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('Usuario no encontrado');
     }
 
+    if (user.deletedAt) {
+        throw new UnauthorizedException('Esta cuenta ha sido desactivada.');
+    }
+
     if (user.role === Role.ADMIN) {
         return { 
             id: payload.sub,

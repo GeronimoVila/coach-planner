@@ -6,6 +6,7 @@ import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
 import { CloneWeekDto } from './dto/clone-week.dto';
+import { UpdateClassDto } from './dto/update-class.dto';
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('classes')
@@ -47,6 +48,13 @@ export class ClassesController {
   findOne(@Param('id') id: string, @Request() req) {
     const orgId = req.user.organizationId || req.user.orgId;
     return this.classesService.findOne(id, orgId);
+  }
+
+  @Patch(':id')
+  @Roles(Role.ADMIN, Role.OWNER, Role.INSTRUCTOR)
+  update(@Param('id') id: string, @Body() updateClassDto: UpdateClassDto, @Request() req) {
+    const orgId = req.user.organizationId || req.user.orgId;
+    return this.classesService.update(id, updateClassDto, orgId);
   }
 
   @Delete(':id')

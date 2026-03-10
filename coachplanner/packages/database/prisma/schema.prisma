@@ -13,6 +13,7 @@ datasource db {
 enum Role {
   STUDENT
   INSTRUCTOR
+  STAFF
   ADMIN
   OWNER
 }
@@ -29,74 +30,120 @@ enum PlanType {
   PRO
 }
 
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
+enum TransactionType {
+  MANUAL_ADD
+  MANUAL_REMOVE
+  BOOKING_DEDUCT
+  BOOKING_REFUND
+  PACKAGE_EXPIRED
+}
+
 // --- MODELOS ---
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  fullName      String?   @map("full_name")
-  passwordHash  String?   @map("password_hash")
-  avatarUrl     String?   @map("avatar_url")
-  provider      String    @default("EMAIL")
-  role  Role  @default(STUDENT)
-  createdAt     DateTime  @default(now()) @map("created_at")
-  emailVerified DateTime?
-  verificationToken String? @unique
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  fullName             String?   @map("full_name")
+  passwordHash         String?   @map("password_hash")
+  avatarUrl            String?   @map("avatar_url")
+  provider             String    @default("EMAIL")
+  role                 Role      @default(STUDENT)
+  phoneNumber          String?   @map("phone_number")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  emailVerified        DateTime?
+  verificationToken    String?   @unique
   resetPasswordToken   String?   @unique
   resetPasswordExpires DateTime?
+  deletedAt  DateTime?  @map("deleted_at")
 
   // Relaciones
   organizationsOwned Organization[] // Gyms que posee
-  memberships        Membership[]   // Gyms a los que va
+  memberships        Membership[] // Gyms a los que va
   instructedClasses  ClassSession[] // Clases que da
   bookings           Booking[]
   notifications      Notification[]
+  transactions         CreditTransaction[] @relation("UserTransactions")
+  performedTransactions CreditTransaction[] @relation("PerformedTransactions")
 
   @@map("users")
 }
 
 model Organization {
-  id                  String   @id @default(uuid())
-  name                String
-  slug                String   @unique
-  ownerId             String   @map("owner_id")
-  
+  id      String @id @default(uuid())
+  name    String
+  slug    String @unique
+  ownerId String @map("owner_id")
+
   // Configuración
-  plan        PlanType @default(FREE)
-  slotDurationMinutes Int      @default(60) @map("slot_duration")
-  cancellationWindow  Int      @default(2)  @map("cancellation_window")
-  openHour            Int      @default(7)  @map("open_hour")
-  closeHour           Int      @default(22) @map("close_hour")
-  isActive            Boolean  @default(true) @map("is_active")
-  createdAt           DateTime @default(now()) @map("created_at")
+  plan                 PlanType @default(FREE)
+  slotDurationMinutes  Int      @default(60) @map("slot_duration")
+  cancellationWindow   Int      @default(2) @map("cancellation_window")
+  openHour             Int      @default(7) @map("open_hour")
+  closeHour            Int      @default(22) @map("close_hour")
+  bookingWindowMinutes Int      @default(15) @map("booking_window_minutes")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
 
   // Relaciones
-  owner         User           @relation(fields: [ownerId], references: [id])
+  owner         User               @relation(fields: [ownerId], references: [id])
   memberships   Membership[]
   categories    Category[]
   classSessions ClassSession[]
+  links         OrganizationLink[]
+  invitations   Invitation[]
+  notifications Notification[]
 
   @@map("organizations")
 }
 
 model Membership {
-  id             String   @id @default(uuid())
-  userId         String   @map("user_id")
-  organizationId String   @map("organization_id")
-  role           Role     @default(STUDENT)
-  categoryId     Int?     @map("category_id")
-  credits        Int      @default(0)
-  joinedAt       DateTime @default(now()) @map("joined_at")
+  id             String           @id @default(uuid())
+  userId         String           @map("user_id")
+  organizationId String           @map("organization_id")
+  role           Role             @default(STUDENT)
+  categoryId     Int?             @map("category_id")
+  credits        Int              @default(0)
+  status         MembershipStatus @default(ACTIVE)
+  joinedAt       DateTime         @default(now()) @map("joined_at")
 
   // Relaciones
-  user           User             @relation(fields: [userId], references: [id])
-  organization   Organization     @relation(fields: [organizationId], references: [id])
-  category       Category?        @relation(fields: [categoryId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  category       Category?       @relation(fields: [categoryId], references: [id])
   creditPackages CreditPackage[]
+  creditTransactions CreditTransaction[]
 
   // Validaciones
   @@unique([userId, organizationId])
   @@map("memberships")
+}
+
+model Invitation {
+  id             String           @id @default(uuid())
+  email          String
+  role           Role             @default(INSTRUCTOR)
+  token          String           @unique
+  organizationId String           @map("organization_id")
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime         @map("expires_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([email, organizationId])
+  @@map("invitations")
 }
 
 model Category {
@@ -106,9 +153,9 @@ model Category {
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  organization   Organization   @relation(fields: [organizationId], references: [id])
-  memberships    Membership[]
-  classSessions  ClassSession[]
+  organization  Organization    @relation(fields: [organizationId], references: [id])
+  memberships   Membership[]
+  classSessions ClassCategory[]
 
   @@map("categories")
 }
@@ -116,37 +163,48 @@ model Category {
 model CreditPackage {
   id              String   @id @default(uuid())
   membershipId    String   @map("membership_id")
-  name            String   
+  name            String
   initialAmount   Int      @map("initial_amount")
   remainingAmount Int      @map("remaining_amount")
   expiresAt       DateTime @map("expires_at")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  membership      Membership @relation(fields: [membershipId], references: [id])
-  bookings        Booking[]
+  membership Membership @relation(fields: [membershipId], references: [id])
+  bookings   Booking[]
+  creditTransactions CreditTransaction[]
 
   @@map("credit_packages")
 }
 
 model ClassSession {
-  id             String   @id @default(uuid())
-  organizationId String   @map("organization_id")
+  id             String          @id @default(uuid())
+  organizationId String          @map("organization_id")
   title          String
   description    String?
-  startTime      DateTime @map("start_time")
-  endTime        DateTime @map("end_time")
+  startTime      DateTime        @map("start_time")
+  endTime        DateTime        @map("end_time")
   capacity       Int
-  instructorId   String   @map("instructor_id")
-  categoryId     Int?     @map("category_id")
-  isCancelled    Boolean  @default(false) @map("is_cancelled")
-
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  instructor     User         @relation(fields: [instructorId], references: [id])
-  category       Category?    @relation(fields: [categoryId], references: [id]) 
+  instructorId   String          @map("instructor_id")
+  categories     ClassCategory[]
+  isCancelled    Boolean         @default(false) @map("is_cancelled")
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  instructor     User            @relation(fields: [instructorId], references: [id])
   bookings       Booking[]
 
   @@map("class_sessions")
 }
+
+model ClassCategory {
+  classSessionId String @map("class_session_id")
+  categoryId     Int    @map("category_id")
+
+  classSession ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+  category     Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([classSessionId, categoryId])
+  @@map("class_category_pivot")
+}
+
 model Booking {
   id              String        @id @default(uuid())
   userId          String        @map("user_id")
@@ -156,23 +214,25 @@ model Booking {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @default(now()) @updatedAt
 
-  classSession    ClassSession  @relation(fields: [classSessionId], references: [id])
-  creditPackage   CreditPackage @relation(fields: [creditPackageId], references: [id])
-  user            User          @relation(fields: [userId], references: [id])
+  classSession  ClassSession  @relation(fields: [classSessionId], references: [id])
+  creditPackage CreditPackage @relation(fields: [creditPackageId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
 
   @@map("bookings")
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  title     String
-  message   String
-  isRead    Boolean  @default(false) @map("is_read")
-  type      String   @default("INFO") // INFO, WARNING, SUCCESS
-  createdAt DateTime @default(now()) @map("created_at")
+  id             String        @id @default(uuid())
+  userId         String        @map("user_id")
+  title          String
+  message        String
+  isRead         Boolean       @default(false) @map("is_read")
+  type           String        @default("INFO") // INFO, WARNING, SUCCESS
+  createdAt      DateTime      @default(now()) @map("created_at")
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  user      User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@map("notifications")
 }
@@ -188,15 +248,51 @@ model Announcement {
 }
 
 model PlanLimits {
-  id             String   @id @default(cuid())
-  plan           PlanType @unique
+  id   String   @id @default(cuid())
+  plan PlanType @unique
+
+  maxStudents   Int @default(5)
+  maxCategories Int @default(2)
+  maxClasses    Int @default(10)
+
+  canExportData Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrganizationLink {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  label          String
+  url            String
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_links")
+}
+
+model CreditTransaction {
+  id              String          @id @default(uuid())
+  membershipId    String          @map("membership_id")
+  creditPackageId String?         @map("credit_package_id")
+  userId          String          @map("user_id")
+  performedById   String          @map("performed_by_id")
   
-  maxStudents    Int      @default(5)
-  maxCategories  Int      @default(2)
-  maxClasses     Int      @default(10)
+  amount          Int
+  type            TransactionType
+  description     String?
   
-  canExportData  Boolean  @default(false)
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  // Relaciones
+  membership    Membership     @relation(fields: [membershipId], references: [id])
+  creditPackage CreditPackage? @relation(fields: [creditPackageId], references: [id])
+  user          User           @relation("UserTransactions", fields: [userId], references: [id])
+  performedBy   User           @relation("PerformedTransactions", fields: [performedById], references: [id])
+
+  @@map("credit_transactions")
 }

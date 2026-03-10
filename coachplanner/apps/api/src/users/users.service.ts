@@ -14,6 +14,7 @@ export class UsersService {
         id: true, 
         email: true, 
         fullName: true,
+        phoneNumber: true,
       }
     });
     if (!user) throw new NotFoundException('Usuario no encontrado');
@@ -27,6 +28,10 @@ export class UsersService {
       updateData.fullName = data.fullName;
     }
 
+    if (data.phoneNumber !== undefined) {
+      updateData.phoneNumber = data.phoneNumber;
+    }
+
     if (data.password) {
       const salt = await bcrypt.genSalt(10);
       updateData.passwordHash = await bcrypt.hash(data.password, salt);
@@ -35,7 +40,7 @@ export class UsersService {
     return this.db.user.update({
       where: { id: userId },
       data: updateData,
-      select: { id: true, fullName: true, email: true }
+      select: { id: true, fullName: true, email: true, phoneNumber: true }
     });
   }
 }

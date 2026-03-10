@@ -26,15 +26,18 @@ export default function OnboardingCategoryPage() {
 
     api.students.getAvailableCategories(token)
       .then((data: Category[]) => { 
-         setCategories(data);
-         setIsLoading(false);
+         if (!data || data.length === 0) {
+             router.replace('/');
+         } else {
+             setCategories(data);
+             setIsLoading(false);
+         }
       })
       .catch((err) => {
         console.error(err);
-        toast.error("Error cargando las categorías");
-        setIsLoading(false);
+        router.replace('/'); 
       });
-  }, [token]);
+  }, [token, router]);
 
   const handleSubmit = async () => {
     if (categories.length > 0 && !selectedId) return;
@@ -45,7 +48,7 @@ export default function OnboardingCategoryPage() {
     try {
       if (categories.length > 0 && selectedId) {
           await api.students.updateCategory(token, selectedId);
-          toast.success("¡Categoría guardada!");
+          toast.success("¡Disciplina guardada!");
 
           const sessionData = await api.auth.refreshSession(token);
 
@@ -60,68 +63,47 @@ export default function OnboardingCategoryPage() {
 
     } catch (error) {
       console.error(error);
-      toast.error("Error al finalizar el registro. Intenta ingresar nuevamente.");
-      logout();
+      toast.error("Error al guardar la disciplina. Intenta de nuevo.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Cargando opciones...</div>;
-  }
-
-  if (categories.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <div className="max-w-md w-full space-y-8 text-center bg-white p-8 rounded-xl shadow-lg border">
-          <div>
-            <div className="h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
-              🎉
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900">¡Registro Completado!</h1>
-            <p className="mt-2 text-gray-600">
-              Tu gimnasio no requiere seleccionar una disciplina específica. Ya puedes empezar a reservar tus clases.
-            </p>
-          </div>
-
-          <Button 
-            size="lg" 
-            className="w-full bg-blue-600 hover:bg-blue-700" 
-            disabled={isSubmitting}
-            onClick={handleSubmit}
-          >
-            {isSubmitting ? 'Entrando...' : 'Ir a mi Dashboard →'}
-          </Button>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mb-4" />
+            <p className="text-gray-500 animate-pulse">Preparando tu panel...</p>
         </div>
-      </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-8 text-center bg-white p-8 rounded-xl shadow-lg">
+      <div className="max-w-md w-full space-y-8 text-center bg-white p-8 rounded-xl shadow-lg border border-gray-100">
         
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Elige tu disciplina 🏋️</h1>
           <p className="mt-2 text-gray-600">Para personalizar tu experiencia, necesitamos saber qué practicas.</p>
         </div>
 
-        <div className="grid gap-3 text-left max-h-96 overflow-y-auto pr-1">
+        <div className="grid gap-3 text-left max-h-96 overflow-y-auto pr-1 custom-scrollbar">
           {categories.map((cat) => (
             <div 
               key={cat.id}
               onClick={() => setSelectedId(cat.id)}
               className={`
-                cursor-pointer p-4 rounded-lg border-2 transition-all flex items-center justify-between
+                cursor-pointer p-4 rounded-xl border-2 transition-all flex items-center justify-between
                 ${selectedId === cat.id 
-                  ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600' 
+                  ? 'border-blue-600 bg-blue-50/50 ring-1 ring-blue-600' 
                   : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}
               `}
             >
-              <span className="font-medium text-gray-900">{cat.name}</span>
+              <span className={`font-medium ${selectedId === cat.id ? 'text-blue-900' : 'text-gray-700'}`}>
+                  {cat.name}
+              </span>
               <div className={`
-                h-5 w-5 rounded-full border flex items-center justify-center
+                h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors
                 ${selectedId === cat.id ? 'border-blue-600 bg-blue-600' : 'border-gray-300'}
               `}>
                 {selectedId === cat.id && <div className="h-2 w-2 bg-white rounded-full" />}
@@ -132,11 +114,11 @@ export default function OnboardingCategoryPage() {
 
         <Button 
           size="lg" 
-          className="w-full bg-blue-600 hover:bg-blue-700" 
+          className="w-full bg-blue-600 hover:bg-blue-700 shadow-md" 
           disabled={!selectedId || isSubmitting}
           onClick={handleSubmit}
         >
-          {isSubmitting ? 'Finalizando...' : 'Confirmar y Entrar →'}
+          {isSubmitting ? 'Guardando...' : 'Confirmar y Entrar →'}
         </Button>
 
       </div>

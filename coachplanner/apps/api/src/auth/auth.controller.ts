@@ -8,6 +8,7 @@ import { LoginDto } from './dto/login.dto';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
 import { Role } from '@repo/database';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Injectable()
 export class GoogleAuthGuard extends AuthGuard('google') {
@@ -72,6 +73,19 @@ export class AuthController {
     return this.authService.registerStudent(slug, dto);
   }
 
+  @Post('register-invited')
+  registerInvited(@Body() dto: any) {
+    if (!dto.token || !dto.password || !dto.fullName) {
+      throw new BadRequestException('Faltan datos requeridos');
+    }
+    return this.authService.registerInvited(dto);
+  }
+
+  @Get('invitations/info/:token')
+  getInvitationInfo(@Param('token') token: string) {
+    return this.authService.getInvitationInfo(token);
+  }
+
   @HttpCode(HttpStatus.OK)
   @Post('login')
   login(@Body() loginDto: LoginDto) {
@@ -126,6 +140,18 @@ export class AuthController {
     if (password.length < 6) throw new BadRequestException('La contraseña debe tener al menos 6 caracteres');
     
     return this.authService.resetPassword(token, password);
+  }
+
+  @Get('my-gyms')
+  @UseGuards(JwtAuthGuard)
+  getMyGyms(@Request() req) {
+    return this.authService.getMyGyms(req.user.id);
+  }
+
+  @Post('switch-gym')
+  @UseGuards(JwtAuthGuard)
+  switchGym(@Request() req, @Body('targetOrgId') targetOrgId: string) {
+    return this.authService.switchGym(req.user.id, targetOrgId);
   }
 
   @UseGuards(AuthGuard('jwt'))

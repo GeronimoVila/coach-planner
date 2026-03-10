@@ -13,7 +13,15 @@ export const ownerNavItems = [
   { title: 'Calendario', href: '/classes', icon: CalendarDays },
   { title: 'Alumnos', href: '/students', icon: Users },
   { title: 'Categorías', href: '/categories', icon: Tags },
+  { title: 'Mi Equipo', href: '/team', icon: Users },
   { title: 'Configuración', href: '/profile', icon: Settings },
+];
+
+export const staffNavItems = [
+  { title: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { title: 'Calendario', href: '/classes', icon: CalendarDays },
+  { title: 'Alumnos', href: '/students', icon: Users },
+  { title: 'Mi Perfil', href: '/profile', icon: Settings },
 ];
 
 export const studentNavItems = [

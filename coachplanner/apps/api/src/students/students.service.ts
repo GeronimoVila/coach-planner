@@ -55,31 +55,64 @@ export class StudentsService {
     const memberships = await this.db.membership.findMany({
       where: { organizationId: orgId, role: Role.STUDENT },
       include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        category: { select: { id: true, name: true } },
-        creditPackages: {
-            where: {
-                remainingAmount: { gt: 0 },
-                expiresAt: { gt: new Date() }
+        user: { 
+          select: { 
+            id: true, fullName: true, email: true, phoneNumber: true,
+            bookings: {
+              where: { classSession: { organizationId: orgId } },
+              orderBy: { createdAt: 'desc' },
+              take: 1
             }
-        }
+          } 
+        },
+        category: { select: { id: true, name: true } },
+        creditPackages: { orderBy: { createdAt: 'desc' } }
       },
       orderBy: { joinedAt: 'desc' },
     });
 
     return memberships.map((m) => {
-      const realCredits = m.creditPackages.reduce((sum, pkg) => sum + pkg.remainingAmount, 0);
+      const realCredits = m.creditPackages
+         .filter(pkg => pkg.remainingAmount > 0 && new Date(pkg.expiresAt) > new Date())
+         .reduce((sum, pkg) => sum + pkg.remainingAmount, 0);
+
+      let currentStatus = m.status;
+
+      if (currentStatus !== 'SUSPENDED') {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        let lastActivityDate = m.joinedAt;
+
+        if (m.creditPackages.length > 0) {
+           const lastPackageDate = new Date(m.creditPackages[0].createdAt);
+           if (lastPackageDate > lastActivityDate) lastActivityDate = lastPackageDate;
+        }
+
+        if (m.user.bookings.length > 0) {
+           const lastBookingDate = new Date(m.user.bookings[0].createdAt);
+           if (lastBookingDate > lastActivityDate) lastActivityDate = lastBookingDate;
+        }
+
+        if (lastActivityDate < thirtyDaysAgo) {
+           currentStatus = 'INACTIVE';
+        } else {
+           currentStatus = 'ACTIVE';
+        }
+      }
 
       return {
         id: m.userId,
         membershipId: m.id,
         fullName: m.user.fullName,
         email: m.user.email,
+        phoneNumber: m.user.phoneNumber,
         joinedAt: m.joinedAt,
         role: m.role,
         credits: realCredits,
         categoryName: m.category?.name || 'General',
         categoryId: m.categoryId,
+        status: currentStatus,
       };
     });
   }
@@ -159,10 +192,80 @@ export class StudentsService {
       throw new ForbiddenException('No eres miembro de este gimnasio.');
     }
 
-    // 3. Actualizamos
     return this.db.membership.update({
       where: { id: membership.id },
       data: { categoryId }
     });
+  }
+
+  async updatePhone(userId: string, phoneNumber: string) {
+    return this.db.user.update({
+      where: { id: userId },
+      data: { phoneNumber }
+    });
+  }
+
+  async getCreditHistory(studentId: string, orgId?: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const whereCondition: any = { userId: studentId };
+    if (orgId && orgId !== 'ALL') {
+      whereCondition.membership = { organizationId: orgId };
+    }
+
+    const [transactions, total] = await Promise.all([
+      this.db.creditTransaction.findMany({
+        where: whereCondition,
+        include: {
+          performedBy: { select: { fullName: true } },
+          membership: { include: { organization: { select: { name: true } } } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: skip,
+        take: limit,
+      }),
+      this.db.creditTransaction.count({
+        where: whereCondition
+      })
+    ]);
+
+    return {
+      data: transactions,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      }
+    };
+  }
+
+  async findOne(studentId: string, orgId: string) {
+    const membership = await this.db.membership.findUnique({
+      where: {
+        userId_organizationId: { userId: studentId, organizationId: orgId },
+      },
+      include: {
+        user: {
+          select: { id: true, fullName: true, email: true, phoneNumber: true, createdAt: true },
+        },
+        category: { select: { name: true } }
+      },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('El alumno no pertenece a tu gimnasio');
+    }
+
+    return {
+      id: membership.user.id,
+      fullName: membership.user.fullName,
+      email: membership.user.email,
+      phoneNumber: membership.user.phoneNumber,
+      joinedAt: membership.joinedAt,
+      credits: membership.credits,
+      status: membership.status,
+      categoryName: membership.category?.name,
+    };
   }
 }

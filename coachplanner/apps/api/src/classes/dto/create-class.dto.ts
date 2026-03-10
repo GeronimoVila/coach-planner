@@ -1,4 +1,4 @@
-import { IsDate, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsDate, IsInt, IsNotEmpty, IsOptional, IsString, Min, IsArray } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateClassDto {
@@ -26,6 +26,7 @@ export class CreateClassDto {
   capacity: number;
 
   @IsOptional()
-  @IsInt()
-  categoryId?: number;
+  @IsArray()
+  @IsInt({ each: true })
+  categoryIds?: number[];
 }

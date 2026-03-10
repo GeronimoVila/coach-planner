@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from 'src/database/database.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { BookingStatus } from '@repo/database';
+import { BookingStatus, Prisma } from '@repo/database';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -17,89 +17,147 @@ export class BookingsService {
   ) {}
 
   async create(userId: string, orgId: string, dto: CreateBookingDto) {
-    const bookingResult = await this.db.$transaction(async (tx) => {
-      
-      await tx.$executeRaw`SELECT * FROM class_sessions WHERE id = ${dto.classId} FOR UPDATE`;
-      await tx.$executeRaw`SELECT * FROM memberships WHERE user_id = ${userId} AND organization_id = ${orgId} FOR UPDATE`;
-      const membership = await tx.membership.findUnique({
-        where: { userId_organizationId: { userId, organizationId: orgId } },
-      });
-
-      if (!membership) throw new NotFoundException('No eres alumno de este gimnasio');
-      if (membership.credits <= 0) throw new BadRequestException('No tienes créditos suficientes');
-
-      const classSession = await tx.classSession.findUnique({
-        where: { id: dto.classId },
-        include: { bookings: true },
-      });
-
-      if (!classSession) throw new NotFoundException('La clase no existe');
-      
-      if (new Date(classSession.startTime) < new Date()) {
-         throw new BadRequestException('La clase ya comenzó o finalizó');
-      }
-
-      if (classSession.categoryId && !membership.categoryId) {
-        throw new BadRequestException('No tienes una categoría asignada para inscribirte a esta clase.');
-      }
-
-      if (classSession.categoryId && membership.categoryId !== classSession.categoryId) {
-        throw new ConflictException('Esta clase no pertenece a tu categoría.');
-      }
-
-      const activeBookings = classSession.bookings.filter(b => b.status === BookingStatus.CONFIRMED);
-      
-      if (activeBookings.length >= classSession.capacity) {
-        throw new ConflictException('La clase está llena');
-      }
-
-      const existingBooking = await tx.booking.findFirst({
-        where: {
-          classSessionId: dto.classId, 
-          userId: userId,
-          status: BookingStatus.CONFIRMED,
-        },
-      });
-      
-      if (existingBooking) throw new ConflictException('Ya estás anotado en esta clase');
-
-      const validPackages = await tx.creditPackage.findMany({
-        where: {
-          membershipId: membership.id,
-          remainingAmount: { gt: 0 },
-          expiresAt: { gt: new Date() },
-        },
-        orderBy: { expiresAt: 'asc' },
-      });
-
-      if (validPackages.length === 0) throw new BadRequestException('Tus créditos han vencido o no son válidos');
-      const targetPackage = validPackages[0];
-
-      const booking = await tx.booking.create({
-        data: {
-          userId: userId,
-          classSessionId: dto.classId,
-          creditPackageId: targetPackage.id,
-          status: BookingStatus.CONFIRMED,
-        },
-        include: { classSession: true }
-      });
-
-      await tx.creditPackage.update({
-        where: { id: targetPackage.id },
-        data: { remainingAmount: { decrement: 1 } },
-      });
-
-      await tx.membership.update({
-        where: { id: membership.id },
-        data: { credits: { decrement: 1 } },
-      });
-
-      return booking;
+    const membership = await this.db.membership.findUnique({
+      where: { userId_organizationId: { userId, organizationId: orgId } },
     });
 
+    if (!membership) throw new NotFoundException('No eres alumno de este gimnasio');
+    if (membership.credits <= 0) throw new BadRequestException('No tienes créditos suficientes');
+
+    const classSession = await this.db.classSession.findUnique({
+      where: { id: dto.classId },
+      include: { 
+          categories: true,
+          organization: { select: { bookingWindowMinutes: true } }
+      },
+    });
+
+    if (!classSession) throw new NotFoundException('La clase no existe');
+    
+    const now = new Date();
+    const classStart = new Date(classSession.startTime);
+
+    if (classStart < now) {
+       throw new BadRequestException('La clase ya comenzó o finalizó');
+    }
+
+    const diffInMs = classStart.getTime() - now.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+
+    if (diffInMinutes < classSession.organization.bookingWindowMinutes) {
+      throw new BadRequestException(
+        `Las inscripciones ya cerraron. Debes reservar con al menos ${classSession.organization.bookingWindowMinutes} minutos de anticipación.`
+      );
+    }
+
+    const classCategories = classSession.categories.map(c => c.categoryId);
+    if (classCategories.length > 0) {
+      if (!membership.categoryId) {
+        throw new BadRequestException('No tienes una categoría asignada para inscribirte a esta clase.');
+      }
+      if (!classCategories.includes(membership.categoryId)) {
+        throw new ConflictException('Esta clase no pertenece a tu disciplina/categoría.');
+      }
+    }
+
+    let bookingResult;
+
     try {
-      const dateStr = bookingResult.classSession.startTime.toLocaleDateString('es-ES', { 
+      bookingResult = await this.db.$transaction(async (tx) => {
+        
+        await tx.$executeRaw`SELECT 1 FROM class_sessions WHERE id = ${dto.classId} FOR UPDATE`;
+
+        const activeBookingsCount = await tx.booking.count({
+          where: {
+            classSessionId: dto.classId,
+            status: BookingStatus.CONFIRMED
+          }
+        });
+        
+        if (activeBookingsCount >= classSession.capacity) {
+          throw new ConflictException('La clase está llena');
+        }
+
+        const existingBooking = await tx.booking.findFirst({
+          where: {
+            classSessionId: dto.classId, 
+            userId: userId,
+            status: BookingStatus.CONFIRMED,
+          },
+        });
+        if (existingBooking) throw new ConflictException('Ya estás anotado en esta clase');
+
+        await tx.$executeRaw`SELECT 1 FROM memberships WHERE user_id = ${userId} AND organization_id = ${orgId} FOR UPDATE`;
+
+        const validPackages = await tx.creditPackage.findMany({
+          where: {
+            membershipId: membership.id,
+            remainingAmount: { gt: 0 },
+            expiresAt: { gt: now },
+          },
+          orderBy: { expiresAt: 'asc' },
+        });
+
+        if (validPackages.length === 0) throw new BadRequestException('Tus créditos han vencido o no son válidos');
+        const targetPackage = validPackages[0];
+
+        const booking = await tx.booking.create({
+          data: {
+            userId: userId,
+            classSessionId: dto.classId,
+            creditPackageId: targetPackage.id,
+            status: BookingStatus.CONFIRMED,
+          },
+          include: { classSession: true }
+        });
+
+        await tx.creditPackage.update({
+          where: { id: targetPackage.id },
+          data: { remainingAmount: { decrement: 1 } },
+        });
+
+        await tx.membership.update({
+          where: { id: membership.id },
+          data: { credits: { decrement: 1 } },
+        });
+
+        await tx.creditTransaction.create({
+          data: {
+            membershipId: membership.id,
+            creditPackageId: targetPackage.id,
+            userId: userId,
+            performedById: userId,
+            amount: -1,
+            type: 'BOOKING_DEDUCT',
+            description: `Reserva para clase: ${classSession.title}`,
+          }
+        });
+
+        return booking;
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+        maxWait: 5000,
+        timeout: 10000
+      });
+      
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ConflictException || error instanceof NotFoundException) {
+        throw error;
+      }
+      
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2028' || error.code === 'P2034') {
+          throw new ConflictException('El sistema está procesando demasiadas reservas en este momento. Por favor, intenta de nuevo en unos segundos.');
+        }
+      }
+      
+      console.error("Error crítico en reserva:", error);
+      throw error;
+    }
+
+    try {
+      const dateStr = bookingResult.classSession.startTime.toLocaleString('es-AR', { 
+        timeZone: 'America/Argentina/Buenos_Aires',
         weekday: 'long', 
         day: 'numeric',
         hour: '2-digit', 
@@ -110,7 +168,16 @@ export class BookingsService {
         userId,
         'Reserva Confirmada ✅',
         `Te esperamos en la clase de ${bookingResult.classSession.title} el ${dateStr}.`,
-        'SUCCESS'
+        'SUCCESS',
+        orgId
+      );
+
+      const student = await this.db.user.findUnique({ where: { id: userId }, select: { fullName: true } });
+      await this.notifications.notifyAdmins(
+        orgId,
+        'Nueva Reserva 📅',
+        `El alumno ${student?.fullName || 'Usuario'} se anotó en la clase de ${bookingResult.classSession.title}.`,
+        'INFO'
       );
     } catch (error) {
       console.error('Error enviando notificación de reserva:', error);
@@ -180,9 +247,21 @@ export class BookingsService {
         data: { remainingAmount: { increment: 1 } }
       });
 
-      await tx.membership.update({
+      const membership = await tx.membership.update({
         where: { userId_organizationId: { userId, organizationId: orgId } },
         data: { credits: { increment: 1 } }
+      });
+
+      await tx.creditTransaction.create({
+        data: {
+          membershipId: membership.id,
+          creditPackageId: booking.creditPackageId,
+          userId: userId,
+          performedById: userId,
+          amount: 1,
+          type: 'BOOKING_REFUND',
+          description: `Cancelación de reserva: ${booking.classSession.title}`,
+        }
       });
 
       return { 
@@ -199,16 +278,18 @@ export class BookingsService {
         userId,
         'Reserva Cancelada ↩️',
         `Has cancelado tu asistencia a ${cancelResult.className}. Se te ha devuelto el crédito.`,
-        'INFO'
+        'INFO',
+        orgId
       );
 
-      const dateStr = cancelResult.classDate.toLocaleDateString('es-ES', { 
+      const dateStr = cancelResult.classDate.toLocaleString('es-AR', { 
+        timeZone: 'America/Argentina/Buenos_Aires',
         day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
       });
 
-      await this.notifications.create(
-        cancelResult.instructorId,
-        'Baja en tu clase 📢',
+      await this.notifications.notifyAdmins(
+        orgId,
+        'Baja de Reserva 📢',
         `El alumno ${cancelResult.studentName} canceló su asistencia a ${cancelResult.className} (${dateStr}).`,
         'WARNING'
       );
@@ -220,25 +301,31 @@ export class BookingsService {
     return { message: cancelResult.message };
   }
 
-  async getStudentHistory(userId: string, orgId: string) {
-    const bookings = await this.db.booking.findMany({
-      where: {
-        userId: userId,
-        classSession: {
-          organizationId: orgId,
+  async getStudentHistory(userId: string, orgId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const [bookings, total] = await Promise.all([
+      this.db.booking.findMany({
+        where: {
+          userId: userId,
+          classSession: { organizationId: orgId },
         },
-      },
-      include: {
-        classSession: {
-          include: {
-            instructor: { select: { fullName: true } }
-          }
-        }, 
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        include: {
+          classSession: {
+            include: { instructor: { select: { fullName: true } } }
+          }, 
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: skip,
+        take: limit,
+      }),
+      this.db.booking.count({
+        where: {
+          userId: userId,
+          classSession: { organizationId: orgId },
+        }
+      })
+    ]);
 
     const historyLog: any[] = [];
 
@@ -257,7 +344,7 @@ export class BookingsService {
         historyLog.push({
           id: booking.id + '_cancelled',
           action: 'CANCELLED',
-          date: (booking as any).updatedAt, 
+          date: (booking as any).updatedAt || booking.createdAt, 
           className: booking.classSession.title,
           instructorName: booking.classSession.instructor?.fullName || 'Sin instructor',
           classDate: booking.classSession.startTime,
@@ -266,6 +353,14 @@ export class BookingsService {
       }
     });
 
-    return historyLog.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return {
+      data: historyLog.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      }
+    };
   }
 }

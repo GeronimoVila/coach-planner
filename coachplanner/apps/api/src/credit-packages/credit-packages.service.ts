@@ -12,7 +12,7 @@ export class CreditPackagesService {
     private readonly emailService: EmailService
   ) {}
 
-  async create(dto: CreateCreditPackageDto, orgId: string) {
+  async create(dto: CreateCreditPackageDto, orgId: string, adminId: string) {
     const membership = await this.db.membership.findUnique({
       where: {
         userId_organizationId: {
@@ -48,14 +48,32 @@ export class CreditPackagesService {
         },
       });
 
+      await tx.creditTransaction.create({
+        data: {
+          membershipId: membership.id,
+          creditPackageId: creditPackage.id,
+          userId: dto.studentId,
+          performedById: adminId,
+          amount: dto.amount,
+          type: 'MANUAL_ADD',
+          description: `Pack añadido: ${dto.name}`,
+        }
+      });
+
       return { creditPackage, updatedMembership };
     });
+
     try {
+        const expiresStr = expiresAt.toLocaleDateString('es-AR', {
+            timeZone: 'America/Argentina/Buenos_Aires'
+        });
+
         await this.notifications.create(
           dto.studentId,
           '¡Pack de Créditos Activado! 🎒',
-          `Se han acreditado ${dto.amount} clases del pack "${dto.name}". Vencen el ${expiresAt.toLocaleDateString()}.`,
-          'SUCCESS'
+          `Se han acreditado ${dto.amount} clases del pack "${dto.name}". Vencen el ${expiresStr}.`,
+          'SUCCESS',
+          orgId
         );
         if (membership.user && membership.user.email) {
             await this.emailService.sendBalanceAdded(

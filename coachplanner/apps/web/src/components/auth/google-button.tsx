@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 
 interface GoogleButtonProps {
-  mode: 'LOGIN' | 'REGISTER_OWNER' | 'JOIN_GYM';
+  mode: 'LOGIN' | 'REGISTER_OWNER' | 'JOIN_GYM' | 'REGISTER_USER';
   gymSlug?: string;
   text?: string;
   className?: string;
@@ -21,6 +21,9 @@ export function GoogleButton({ mode, gymSlug, text, className }: GoogleButtonPro
       actionStr = `join_gym_${gymSlug}`;
     } else if (mode === 'REGISTER_OWNER') {
       intent = { type: 'REGISTER_OWNER' };
+      actionStr = 'register';
+    } else if (mode === 'REGISTER_USER') {
+      intent = { type: 'REGISTER_USER' };
       actionStr = 'register';
     } else {
       intent = { type: 'LOGIN' };

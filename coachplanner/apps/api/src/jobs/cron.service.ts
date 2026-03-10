@@ -54,7 +54,8 @@ export class CronService {
             pkg.membership.userId,
             'Créditos Vencidos ❌',
             `Tu pack "${pkg.name || 'de créditos'}" ha expirado.`,
-            'INFO'
+            'INFO',
+            pkg.membership.organizationId
         );
       }
     } else {
@@ -92,8 +93,9 @@ export class CronService {
             await this.notifications.create(
                 pkg.membership.userId,
                 'Tu pack vence pronto ⏳',
-                `Te quedan ${pkg.remainingAmount} clases en tu pack "${pkg.name || 'Créditos'}" que vencen el ${pkg.expiresAt.toLocaleDateString()}. ¡Úsalos!`,
-                'WARNING'
+                `Te quedan ${pkg.remainingAmount} clases en tu pack "${pkg.name || 'Créditos'}" que vencen el ${pkg.expiresAt.toLocaleDateString('es-ES')}. ¡Úsalos!`,
+                'WARNING',
+                pkg.membership.organizationId
             );
         }
     }

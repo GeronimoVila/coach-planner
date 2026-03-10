@@ -80,11 +80,44 @@ export default function LoginPage() {
       login(access_token, user);
 
       toast.success("¡Bienvenido de nuevo!");
+      const redirectUrl = localStorage.getItem('redirect_after_login');
 
       if (user.role === 'ADMIN') {
         router.push("/admin");
+      } else if (user.role === 'STUDENT') {
+         if (!user.phoneNumber) {
+             router.push('/onboarding/phone');
+             return;
+         }
+
+         if (user.categoryId === null) {
+            try {
+                const categories = await api.get('/categories', {
+                    headers: { Authorization: `Bearer ${access_token}` }
+                }).then(res => res.data);
+
+                if (categories && categories.length > 0) {
+                    router.push('/onboarding/category');
+                    return;
+                }
+            } catch (err) {
+                console.error("No se pudo validar categorías en el login", err);
+            }
+         }
+         
+         if (redirectUrl) {
+            localStorage.removeItem('redirect_after_login');
+            router.push(redirectUrl);
+         } else {
+            router.push("/");
+         }
       } else {
-        router.push("/"); 
+         if (redirectUrl) {
+            localStorage.removeItem('redirect_after_login');
+            router.push(redirectUrl);
+         } else {
+            router.push("/"); 
+         }
       }
       
     } catch (error: any) {

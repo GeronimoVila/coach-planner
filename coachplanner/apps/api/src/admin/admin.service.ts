@@ -1,4 +1,4 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { Role, PlanType } from '@repo/database';
 import * as bcrypt from 'bcrypt';
@@ -8,12 +8,14 @@ export class AdminService {
   constructor(private readonly db: DatabaseService) {}
 
   async getUsers(search?: string) {
-    const whereCondition = search ? {
-      OR: [
+    const whereCondition: any = {};
+
+    if (search) {
+      whereCondition.OR = [
         { fullName: { contains: search, mode: 'insensitive' as const } },
         { email: { contains: search, mode: 'insensitive' as const } },
-      ]
-    } : {};
+      ];
+    }
 
     const users = await this.db.user.findMany({
       where: whereCondition,
@@ -23,6 +25,7 @@ export class AdminService {
         email: true,
         role: true,
         createdAt: true,
+        deletedAt: true,
         _count: {
           select: {
             memberships: true,
@@ -52,7 +55,32 @@ export class AdminService {
       return {
         ...user,
         role: realRole,
+        isDeleted: user.deletedAt !== null,
       };
+    });
+  }
+
+  async softDeleteUser(userId: string) {
+    const user = await this.db.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    
+    if (user.role === Role.ADMIN) {
+      throw new ConflictException('No puedes desactivar a un administrador global.');
+    }
+
+    return this.db.user.update({
+      where: { id: userId },
+      data: { deletedAt: new Date() }
+    });
+  }
+
+  async restoreUser(userId: string) {
+    const user = await this.db.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    return this.db.user.update({
+      where: { id: userId },
+      data: { deletedAt: null }
     });
   }
   
@@ -165,8 +193,10 @@ export class AdminService {
       email: user.email,
       role: realRole,
       createdAt: user.createdAt,
+      deletedAt: user.deletedAt,
       ownedGyms: user.organizationsOwned,
       memberships: user.memberships.map(m => ({
+        orgId: m.organization.id,
         gymName: m.organization.name,
         role: m.role,
         credits: m.credits,
@@ -238,8 +268,8 @@ export class AdminService {
     const [totalGyms, activeGyms, totalUsers, newUsers, classesToday] = await Promise.all([
       this.db.organization.count(),
       this.db.organization.count({ where: { isActive: true } }),
-      this.db.user.count(),
-      this.db.user.count({ where: { createdAt: { gte: yesterday } } }),
+      this.db.user.count({ where: { deletedAt: null } }),
+      this.db.user.count({ where: { createdAt: { gte: yesterday }, deletedAt: null } }),
       this.db.classSession.count({
         where: {
           startTime: { gte: startOfDay, lte: endOfDay }
@@ -259,6 +289,42 @@ export class AdminService {
       },
       activity: {
         classesToday
+      }
+    };
+  }
+
+  async getAdminActivity(adminId: string, page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+
+    const [transactions, total] = await Promise.all([
+      this.db.creditTransaction.findMany({
+        where: {
+          performedById: adminId,
+          userId: { not: adminId }
+        },
+        include: {
+          user: { select: { fullName: true, email: true } },
+          membership: { include: { organization: { select: { name: true } } } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: skip,
+        take: limit,
+      }),
+      this.db.creditTransaction.count({
+        where: {
+          performedById: adminId,
+          userId: { not: adminId }
+        }
+      })
+    ]);
+
+    return {
+      data: transactions,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       }
     };
   }

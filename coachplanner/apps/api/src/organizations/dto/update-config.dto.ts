@@ -23,4 +23,9 @@ export class UpdateConfigDto {
   @Min(0)
   @Max(23)
   closeHour?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  bookingWindowMinutes?: number;
 }

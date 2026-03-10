@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Request, UseGuards, Patch, Param, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request, UseGuards, Patch, Param, BadRequestException, Query } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -6,6 +6,7 @@ import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { UpdatePhoneDto } from './dto/update-phone.dto';
 
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Controller('students')
@@ -17,6 +18,9 @@ export class StudentsController {
   getMe(@Request() req) {
     const userId = req.user.id || req.user.userId;
     const orgId = req.user.orgId || req.user.organizationId;
+    if (!orgId) {
+       throw new BadRequestException('El usuario no está asociado a ninguna organización en la sesión actual');
+    }
     
     return this.studentsService.findMe(userId, orgId);
   }
@@ -36,7 +40,7 @@ export class StudentsController {
   }
 
   @Patch(':id')
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
   update(
     @Request() req, 
     @Param('id') studentId: string, 
@@ -78,5 +82,48 @@ export class StudentsController {
           },
           select: { id: true, name: true }
       });
+  }
+
+  @Patch('me/phone')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STUDENT)
+  async updateMyPhone(@Request() req, @Body() dto: UpdatePhoneDto) {
+    const userId = req.user.id;
+
+    await this.studentsService.updatePhone(userId, dto.phoneNumber);
+    
+    return { 
+      message: 'Teléfono actualizado correctamente' 
+    }
+  };
+
+@Get(':id/credit-history')
+  @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
+  async getStudentCreditHistory(
+    @Request() req,
+    @Param('id') studentId: string,
+    @Query('orgId') queryOrgId?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10'
+  ) {
+    let orgIdToFilter = queryOrgId;
+    
+    if (req.user.role !== Role.ADMIN) {
+      orgIdToFilter = req.user.orgId || req.user.organizationId;
+    }
+
+    return this.studentsService.getCreditHistory(
+      studentId, 
+      orgIdToFilter, 
+      Number(page), 
+      Number(limit)
+    );
+  }
+
+  @Get(':id')
+  @Roles(Role.OWNER, Role.ADMIN, Role.STAFF, Role.INSTRUCTOR)
+  findOne(@Request() req, @Param('id') studentId: string) {
+    const orgId = req.user.orgId || req.user.organizationId;
+    return this.studentsService.findOne(studentId, orgId);
   }
 }

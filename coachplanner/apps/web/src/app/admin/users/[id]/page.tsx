@@ -15,7 +15,12 @@ import {
   X,
   Lock,
   Key,
-  ScanFace
+  ScanFace,
+  Activity,
+  ChevronLeft,
+  ChevronRight,
+  UserMinus,
+  AlertTriangle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +35,7 @@ interface UserDetail {
   email: string;
   role: string;
   createdAt: string;
+  deletedAt: string | null;
   ownedGyms: {
     id: string;
     name: string;
@@ -37,6 +43,7 @@ interface UserDetail {
     isActive: boolean;
   }[];
   memberships: {
+    orgId: string;
     gymName: string;
     role: string;
     credits: number;
@@ -45,6 +52,26 @@ interface UserDetail {
   stats: {
     classesTaught: number;
   };
+}
+
+interface CreditTransaction {
+  id: string;
+  amount: number;
+  type: string;
+  description: string;
+  createdAt: string;
+  performedBy: { fullName: string | null } | null;
+  membership: { organization: { name: string } } | null;
+}
+
+interface AdminActivityTransaction {
+  id: string;
+  amount: number;
+  type: string;
+  description: string;
+  createdAt: string;
+  user: { fullName: string | null; email: string } | null;
+  membership: { organization: { name: string } } | null;
 }
 
 export default function UserDetailPage() {
@@ -61,6 +88,18 @@ export default function UserDetailPage() {
   const [isResetting, setIsResetting] = useState(false);
 
   const [isImpersonating, setIsImpersonating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [history, setHistory] = useState<CreditTransaction[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
+
+  const [adminActivity, setAdminActivity] = useState<AdminActivityTransaction[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
+  const [totalActivityPages, setTotalActivityPages] = useState(1);
 
   useEffect(() => {
     if (!params?.id) return;
@@ -80,6 +119,48 @@ export default function UserDetailPage() {
 
     fetchUser();
   }, [params?.id, router]);
+
+  useEffect(() => {
+    if (!params?.id) return;
+
+    const fetchHistory = async () => {
+      setLoadingHistory(true);
+      try {
+        const url = selectedOrgId === 'ALL' 
+          ? `/students/${params.id}/credit-history?page=${historyPage}&limit=10`
+          : `/students/${params.id}/credit-history?page=${historyPage}&limit=10&orgId=${selectedOrgId}`;
+
+        const { data } = await api.get(url);
+        setHistory(data.data);
+        setTotalPages(data.meta.totalPages);
+      } catch (error) {
+        console.error('Error cargando historial:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    fetchHistory();
+  }, [params?.id, historyPage, selectedOrgId]);
+
+  useEffect(() => {
+    if (!user || user.role === 'STUDENT') return;
+
+    const fetchActivity = async () => {
+      setLoadingActivity(true);
+      try {
+        const { data } = await api.get(`/admin/users/${user.id}/activity?page=${activityPage}&limit=10`);
+        setAdminActivity(data.data);
+        setTotalActivityPages(data.meta.totalPages);
+      } catch (error) {
+        console.error('Error cargando actividad de admin:', error);
+      } finally {
+        setLoadingActivity(false);
+      }
+    };
+
+    fetchActivity();
+  }, [user, activityPage]);
 
   const handleUpdateEmail = async () => {
     if (!user || !newEmail) return;
@@ -147,6 +228,51 @@ export default function UserDetailPage() {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!user) return;
+    
+    const isConfirmed = confirm(
+        `¡ATENCIÓN! ¿Estás seguro de que deseas desactivar la cuenta de ${user.email}?\n\n` +
+        `Esta es una acción global. El usuario ya no podrá iniciar sesión en la plataforma, pero sus registros históricos (clases, transacciones) se mantendrán intactos para reportes.\n\n` +
+        `Si deseas proceder, haz clic en "Aceptar".`
+    );
+
+    if (!isConfirmed) return;
+
+    setIsDeleting(true);
+    try {
+      await api.delete(`/admin/users/${user.id}`);
+      toast.success('Usuario desactivado exitosamente');
+      router.push('/admin/users');
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al intentar desactivar la cuenta');
+      setIsDeleting(false);
+    }
+  };
+
+  const handleRestoreUser = async () => {
+    if (!user) return;
+    
+    if (!confirm(`¿Estás seguro de que deseas reactivar la cuenta de ${user.email}? Podrá volver a iniciar sesión de inmediato.`)) return;
+
+    setIsDeleting(true);
+    try {
+      await api.patch(`/admin/users/${user.id}/restore`);
+      toast.success('Usuario reactivado exitosamente');
+      setUser({ ...user, deletedAt: null });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Error al intentar reactivar la cuenta');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const getBadgeStyle = (amount: number, type: string) => {
+    if (amount > 0) return "bg-green-100 text-green-800 hover:bg-green-200 border-green-200";
+    if (amount < 0) return "bg-red-100 text-red-800 hover:bg-red-200 border-red-200";
+    return "bg-gray-100 text-gray-800 border-gray-200";
+  };
+
   if (loading) {
     return (
       <div className="flex h-96 w-full items-center justify-center">
@@ -158,7 +284,7 @@ export default function UserDetailPage() {
   if (!user) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       <Button variant="ghost" size="sm" asChild className="mb-4">
         <Link href="/admin/users">
           <ArrowLeft className="mr-2 h-4 w-4" /> Volver a la lista
@@ -309,43 +435,297 @@ export default function UserDetailPage() {
         </Card>
       </div>
 
-      <Card className="border-red-100 bg-red-50/10">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-gray-800">
-            <Lock className="h-5 w-5 text-gray-500" /> Seguridad
-          </CardTitle>
-          <CardDescription>
-            Restablecer contraseña manualmente. El usuario deberá usar esta nueva clave para ingresar.
-          </CardDescription>
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-purple-500" /> Historial de Créditos
+            </CardTitle>
+            <CardDescription>
+              Auditoría de ingresos y egresos de créditos de este usuario.
+            </CardDescription>
+          </div>
+          
+          {user.memberships.length > 0 && (
+            <select
+              className="border border-gray-200 rounded-md px-3 py-1.5 text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              value={selectedOrgId}
+              onChange={(e) => {
+                setSelectedOrgId(e.target.value);
+                setHistoryPage(1);
+              }}
+            >
+              <option value="ALL">Todas las organizaciones</option>
+              {user.memberships.map((m) => (
+                <option key={m.orgId} value={m.orgId}>
+                  {m.gymName}
+                </option>
+              ))}
+            </select>
+          )}
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-4 max-w-md">
-            <div className="grid w-full gap-1.5">
-              <label htmlFor="pass" className="text-sm font-medium text-gray-700">
-                Nueva Contraseña Temporal
-              </label>
-              <div className="relative">
-                <Key className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                <Input
-                  id="pass"
-                  type="text" 
-                  placeholder="Ej: Gimnasio123"
-                  className="pl-9 bg-white"
-                  value={resetPassword}
-                  onChange={(e) => setResetPassword(e.target.value)}
-                />
+          <div className="overflow-x-auto border rounded-md">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-4 py-3 font-medium text-gray-500">Fecha</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">Gimnasio</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">Concepto</th>
+                  <th className="px-4 py-3 font-medium text-gray-500 text-center">Movimiento</th>
+                  <th className="px-4 py-3 font-medium text-gray-500">Autorizado por</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingHistory ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center">
+                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-gray-400" />
+                    </td>
+                  </tr>
+                ) : history.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-8 text-center text-gray-500">
+                      No hay movimientos registrados.
+                    </td>
+                  </tr>
+                ) : (
+                  history.map((tx) => (
+                    <tr key={tx.id} className="bg-white border-b hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                        {new Date(tx.createdAt).toLocaleDateString('es-ES', { 
+                          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+                        })}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 font-medium">
+                        {tx.membership?.organization?.name || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        {tx.description || tx.type.replace('_', ' ')}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge variant="outline" className={getBadgeStyle(tx.amount, tx.type)}>
+                          {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">
+                        {tx.performedBy?.fullName || 'Sistema automático'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!loadingHistory && totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-sm text-gray-500">
+                Página {historyPage} de {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                  disabled={historyPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                  disabled={historyPage === totalPages}
+                >
+                  Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
               </div>
             </div>
-            <Button 
-              onClick={handleResetPassword} 
-              disabled={!resetPassword || isResetting}
-              className="bg-gray-900 hover:bg-gray-800"
-            >
-              {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Actualizar'}
-            </Button>
-          </div>
+          )}
         </CardContent>
       </Card>
+
+      {user.role !== 'STUDENT' && (
+        <Card className="border-blue-100 bg-blue-50/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-800">
+              <Activity className="h-5 w-5 text-blue-500" /> Créditos Otorgados (Auditoría)
+            </CardTitle>
+            <CardDescription>
+              Historial de movimientos, cargas y quitas de créditos que este usuario ha realizado a otros alumnos.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto border rounded-md border-blue-100 bg-white">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-blue-50/50 border-b border-blue-100">
+                  <tr>
+                    <th className="px-4 py-3 font-medium text-gray-600">Fecha</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Alumno Receptor</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Gimnasio</th>
+                    <th className="px-4 py-3 font-medium text-gray-600">Acción</th>
+                    <th className="px-4 py-3 font-medium text-gray-600 text-center">Créditos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingActivity ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-400" />
+                      </td>
+                    </tr>
+                  ) : adminActivity.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-gray-500">
+                        No ha realizado movimientos a otros alumnos.
+                      </td>
+                    </tr>
+                  ) : (
+                    adminActivity.map((tx) => (
+                      <tr key={tx.id} className="bg-white border-b hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                          {new Date(tx.createdAt).toLocaleDateString('es-ES', { 
+                            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+                          })}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          {tx.user?.fullName || tx.user?.email || 'Usuario Desconocido'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {tx.membership?.organization?.name || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          {tx.description || tx.type.replace('_', ' ')}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant="outline" className={getBadgeStyle(tx.amount, tx.type)}>
+                            {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {!loadingActivity && totalActivityPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <span className="text-sm text-gray-500">
+                  Página {activityPage} de {totalActivityPages}
+                </span>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                    disabled={activityPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setActivityPage(p => Math.min(totalActivityPages, p + 1))}
+                    disabled={activityPage === totalActivityPages}
+                  >
+                    Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="border-red-100 bg-red-50/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-gray-800">
+              <Lock className="h-5 w-5 text-gray-500" /> Seguridad
+            </CardTitle>
+            <CardDescription>
+              Restablecer contraseña manualmente. El usuario deberá usar esta nueva clave para ingresar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+              <div className="grid w-full gap-1.5 flex-1">
+                <label htmlFor="pass" className="text-sm font-medium text-gray-700">
+                  Nueva Contraseña Temporal
+                </label>
+                <div className="relative">
+                  <Key className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="pass"
+                    type="text" 
+                    placeholder="Ej: Gimnasio123"
+                    className="pl-9 bg-white"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                  />
+                </div>
+              </div>
+              <Button 
+                onClick={handleResetPassword} 
+                disabled={!resetPassword || isResetting}
+                className="bg-gray-900 hover:bg-gray-800 w-full sm:w-auto"
+              >
+                {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Actualizar'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {user.role !== 'ADMIN' && (
+          <Card className={user.deletedAt ? "border-green-200 bg-green-50/30" : "border-red-200 bg-white"}>
+            <CardHeader>
+              <CardTitle className={`flex items-center gap-2 ${user.deletedAt ? 'text-green-700' : 'text-red-600'}`}>
+                {user.deletedAt ? <Check className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                {user.deletedAt ? 'Cuenta Desactivada' : 'Zona de Peligro'}
+              </CardTitle>
+              <CardDescription>
+                {user.deletedAt 
+                  ? `Esta cuenta fue desactivada el ${new Date(user.deletedAt).toLocaleDateString()}. El usuario no tiene acceso.`
+                  : 'Desactivar cuenta a nivel global. El usuario no podrá acceder al sistema.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600 max-w-[60%]">
+                  {user.deletedAt 
+                    ? 'Al reactivarla, el usuario recuperará el acceso inmediato a todos sus gimnasios.'
+                    : 'Los registros históricos (asistencias, pagos) se conservarán por seguridad.'}
+                </p>
+                
+                {user.deletedAt ? (
+                  <Button 
+                    variant="outline"
+                    onClick={handleRestoreUser}
+                    disabled={isDeleting}
+                    className="shrink-0 border-green-600 text-green-700 hover:bg-green-50"
+                  >
+                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                    Reactivar Cuenta
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="destructive"
+                    onClick={handleDeleteUser}
+                    disabled={isDeleting}
+                    className="shrink-0"
+                  >
+                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserMinus className="h-4 w-4 mr-2" />}
+                    Desactivar Cuenta
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
     </div>
   );
 }
