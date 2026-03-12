@@ -356,14 +356,20 @@ export default function SettingsPage() {
                                     <Label>Hora Apertura</Label>
                                     <div className="relative">
                                         <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                        <Input type="number" min="0" max="23" className="pl-9" value={gymData.openHour} onChange={e => setGymData({...gymData, openHour: Number(e.target.value)})} />
+                                        <Input type="number" min="0" max="23" className="pl-9" value={gymData.openHour} onChange={e => {
+                                            const val = e.target.value;
+                                            setGymData({
+                                                ...gymData, 
+                                                openHour: val === '' ? '' : Number(val)
+                                            } as any);
+                                        }} />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Hora Cierre</Label>
                                     <div className="relative">
                                         <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                        <Input type="number" min="0" max="23" className="pl-9" value={gymData.closeHour} onChange={e => setGymData({...gymData, closeHour: Number(e.target.value)})} />
+                                        <Input type="number" min="0" max="23" className="pl-9" value={gymData.closeHour} onChange={e => setGymData({...gymData, closeHour: e.target.value === '' ? '' : Number(e.target.value)} as any)} />
                                     </div>
                                 </div>
                             </div>
@@ -373,14 +379,14 @@ export default function SettingsPage() {
                                     <Label>Duración Bloque (min)</Label>
                                     <div className="relative">
                                         <CalendarClock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                        <Input type="number" min="15" step="15" className="pl-9" value={gymData.slotDurationMinutes} onChange={e => setGymData({...gymData, slotDurationMinutes: Number(e.target.value)})} />
+                                        <Input type="number" min="15" step="15" className="pl-9" value={gymData.slotDurationMinutes} onChange={e => setGymData({...gymData, slotDurationMinutes: e.target.value === '' ? '' : Number(e.target.value)} as any)} />
                                     </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Cancelación (horas antes)</Label>
                                     <div className="relative">
                                         <AlertTriangle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                        <Input type="number" min="0" className="pl-9" value={gymData.cancellationWindow} onChange={e => setGymData({...gymData, cancellationWindow: Number(e.target.value)})} />
+                                        <Input type="number" min="0" className="pl-9" value={gymData.cancellationWindow} onChange={e => setGymData({...gymData, cancellationWindow: e.target.value === '' ? '' : Number(e.target.value)} as any)} />
                                     </div>
                                 </div>
                             </div>
@@ -394,7 +400,7 @@ export default function SettingsPage() {
                                         min="0" 
                                         className="pl-9" 
                                         value={gymData.bookingWindowMinutes} 
-                                        onChange={e => setGymData({...gymData, bookingWindowMinutes: Number(e.target.value)})} 
+                                        onChange={e => setGymData({...gymData, bookingWindowMinutes: e.target.value === '' ? '' : Number(e.target.value)} as any)} 
                                     />
                                 </div>
                                 <p className="text-[11px] text-gray-500">

@@ -55,13 +55,21 @@ export default function StudentsPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'INSTRUCTOR')) {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'INSTRUCTOR') {
       toast.error('Acceso denegado. Solo el personal del gimnasio puede ver esta sección.');
       router.push('/');
       return;
-    }
+    }  
     fetchData();
   }, [user, authLoading, router]);
+
+  if (authLoading || !user) {
+    return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400" /></div>;
+  }
 
   const fetchData = async () => {
     setLoading(true);
@@ -431,10 +439,13 @@ export default function StudentsPage() {
                             required 
                             className="pl-9"
                             value={creditForm.amount || ''}
-                            onChange={e => setCreditForm({
+                            onChange={e => {
+                              const val = e.target.value;
+                              setCreditForm({
                                 ...creditForm, 
-                                amount: e.target.value === '' ? 0 : parseInt(e.target.value)
-                            })}
+                                amount: val === '' ? '' : parseInt(val)
+                              } as any);
+                          }}
                         />
                     </div>
                     </div>
@@ -450,8 +461,8 @@ export default function StudentsPage() {
                             value={creditForm.daysValid || ''}
                             onChange={e => setCreditForm({
                                 ...creditForm, 
-                                daysValid: e.target.value === '' ? 0 : parseInt(e.target.value)
-                            })}
+                                daysValid: e.target.value === '' ? '' : parseInt(e.target.value)
+                            } as any)}
                         />
                     </div>
                     </div>

@@ -127,12 +127,22 @@ export default function ClassesPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'INSTRUCTOR')) {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    if (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'INSTRUCTOR') {
+      toast.error('Acceso denegado. Solo el personal del gimnasio puede ver esta sección.');
       router.push('/');
       return;
     }
     fetchData();
-  }, [user, authLoading, router, weekStart]);
+  }, [user, authLoading, router]);
+
+  if (authLoading || !user) {
+    return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400" /></div>;
+  }
 
   const fetchData = async () => {
     const startStr = weekStart.toISOString();
@@ -648,8 +658,13 @@ export default function ClassesPage() {
                 
                 <div>
                     <Label>Cupo Máximo</Label>
-                    <Input type="number" min={hasBookings ? (viewClass?._count?.bookings || 1) : 1} value={formData.capacity} onChange={e => setFormData({...formData, capacity: Number(e.target.value)})} />
-                </div>                  
+                    <Input 
+                        type="number" 
+                        min={hasBookings ? (viewClass?._count?.bookings || 1) : 1} 
+                        value={formData.capacity} 
+                        onChange={e => setFormData({...formData, capacity: e.target.value === '' ? '' : Number(e.target.value)} as any)} 
+                    />
+                </div>                 
                 
                 {categories.length > 0 && (
                     <div>
