@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function AdminLayout({
   children,
@@ -20,6 +21,7 @@ export default function AdminLayout({
     }
 
     if (!isLoading && user && user.role !== 'ADMIN') {
+      toast.error('Acceso denegado.');
       router.push('/');
       return;
     }

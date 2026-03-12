@@ -56,6 +56,7 @@ export default function StudentsPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user || (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'INSTRUCTOR')) {
+      toast.error('Acceso denegado. Solo el personal del gimnasio puede ver esta sección.');
       router.push('/');
       return;
     }

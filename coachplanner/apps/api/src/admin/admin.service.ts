@@ -7,7 +7,7 @@ import * as bcrypt from 'bcrypt';
 export class AdminService {
   constructor(private readonly db: DatabaseService) {}
 
-  async getUsers(search?: string) {
+  async getUsers(search?: string, page: number = 1, limit: number = 10, roleFilter?: string, statusFilter?: string) {
     const whereCondition: any = {};
 
     if (search) {
@@ -17,47 +17,45 @@ export class AdminService {
       ];
     }
 
-    const users = await this.db.user.findMany({
-      where: whereCondition,
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        deletedAt: true,
-        _count: {
-          select: {
-            memberships: true,
-            instructedClasses: true,
-            organizationsOwned: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 50,
-    });
+    if (statusFilter === 'ACTIVE') whereCondition.deletedAt = null;
+    if (statusFilter === 'DISABLED') whereCondition.deletedAt = { not: null };
 
-    return users.map((user) => {
+    if (roleFilter && roleFilter !== 'ALL') {
+       if (roleFilter === 'ADMIN') whereCondition.role = 'ADMIN';
+       if (roleFilter === 'STUDENT') whereCondition.role = 'STUDENT';
+       if (roleFilter === 'OWNER') whereCondition.organizationsOwned = { some: {} };
+       if (roleFilter === 'INSTRUCTOR') whereCondition.instructedClasses = { some: {} };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [users, total] = await Promise.all([
+      this.db.user.findMany({
+        where: whereCondition,
+        select: {
+          id: true, fullName: true, email: true, role: true, createdAt: true, deletedAt: true,
+          _count: { select: { memberships: true, instructedClasses: true, organizationsOwned: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.db.user.count({ where: whereCondition })
+    ]);
+
+    const mappedUsers = users.map((user) => {
       let realRole = user.role;
-
       if (user.role !== Role.ADMIN) {
-        if (user._count.organizationsOwned > 0) {
-          realRole = Role.OWNER;
-        }
-        else if (user._count.instructedClasses > 0) {
-           realRole = Role.INSTRUCTOR;
-        }
+        if (user._count.organizationsOwned > 0) realRole = Role.OWNER;
+        else if (user._count.instructedClasses > 0) realRole = Role.INSTRUCTOR;
       }
-
-      return {
-        ...user,
-        role: realRole,
-        isDeleted: user.deletedAt !== null,
-      };
+      return { ...user, role: realRole, isDeleted: user.deletedAt !== null };
     });
+
+    return {
+      data: mappedUsers,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) || 1 }
+    };
   }
 
   async softDeleteUser(userId: string) {
@@ -84,51 +82,47 @@ export class AdminService {
     });
   }
   
-  async getOrganizations() {
-    const orgs = await this.db.organization.findMany({
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        createdAt: true,
-        isActive: true,
-        plan: true,
-        owner: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
-        },
-        _count: {
-          select: {
-            classSessions: true,
-            memberships: {
-              where: { role: Role.STUDENT }
-            }
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+  async getOrganizations(page: number = 1, limit: number = 10, search?: string, statusFilter?: string, planFilter?: string) {
+    const whereCondition: any = {};
 
-    return orgs.map((org) => ({
-      id: org.id,
-      name: org.name,
-      slug: org.slug,
-      plan: org.plan,
-      owner: {
-        id: org.owner.id,
-        name: org.owner.fullName || org.owner.email,
-        email: org.owner.email
-      },
-      createdAt: org.createdAt,
-      totalClasses: org._count.classSessions,
-      activeStudents: org._count.memberships,
-      isActive: org.isActive,
+    if (search) {
+      whereCondition.OR = [
+        { name: { contains: search, mode: 'insensitive' as const } },
+        { slug: { contains: search, mode: 'insensitive' as const } }
+      ];
+    }
+
+    if (statusFilter === 'ACTIVE') whereCondition.isActive = true;
+    if (statusFilter === 'SUSPENDED') whereCondition.isActive = false;
+    if (planFilter && planFilter !== 'ALL') whereCondition.plan = planFilter as any;
+
+    const skip = (page - 1) * limit;
+
+    const [orgs, total] = await Promise.all([
+      this.db.organization.findMany({
+        where: whereCondition,
+        select: {
+          id: true, name: true, slug: true, createdAt: true, isActive: true, plan: true,
+          owner: { select: { id: true, fullName: true, email: true } },
+          _count: { select: { classSessions: true, memberships: { where: { role: Role.STUDENT } } } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.db.organization.count({ where: whereCondition })
+    ]);
+
+    const mappedOrgs = orgs.map((org) => ({
+      id: org.id, name: org.name, slug: org.slug, plan: org.plan,
+      owner: { id: org.owner.id, name: org.owner.fullName || org.owner.email, email: org.owner.email },
+      createdAt: org.createdAt, totalClasses: org._count.classSessions, activeStudents: org._count.memberships, isActive: org.isActive,
     }));
+
+    return {
+      data: mappedOrgs,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) || 1 }
+    };
   }
 
   async toggleOrganizationStatus(id: string) {
