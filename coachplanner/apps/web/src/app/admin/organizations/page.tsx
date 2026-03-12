@@ -10,7 +10,8 @@ import {
   Dumbbell, 
   Ban, 
   CheckCircle2,
-  UserCircle
+  UserCircle,
+  ScanFace
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ interface Organization {
 export default function AdminOrganizationsPage() {
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
 
   const fetchOrgs = async () => {
     try {
@@ -84,6 +86,31 @@ export default function AdminOrganizationsPage() {
     } catch (error) {
       toast.error('Error al cambiar el plan');
       fetchOrgs();
+    }
+  };
+
+  const handleImpersonate = async (ownerId: string, ownerEmail: string, ownerName: string) => {
+    if (!confirm(`¿Estás seguro que quieres entrar al sistema como ${ownerEmail}?`)) return;
+
+    setImpersonatingId(ownerId);
+    try {
+      const { data } = await api.post('/auth/impersonate', { userId: ownerId });
+      
+      localStorage.setItem('token', data.access_token);
+      
+      if (data.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
+
+      document.cookie = `token=${data.access_token}; path=/;`;
+
+      toast.success(`Iniciando sesión como ${ownerName || ownerEmail}...`);
+
+      window.location.href = '/dashboard'; 
+
+    } catch (error) {
+      toast.error('Error al intentar suplantar identidad');
+      setImpersonatingId(null);
     }
   };
 
@@ -176,18 +203,34 @@ export default function AdminOrganizationsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/register/${org.slug}`} target="_blank">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleImpersonate(org.owner.id, org.owner.email, org.owner.name)}
+                          disabled={impersonatingId === org.owner.id}
+                          className="text-orange-500 hover:text-orange-700 hover:bg-orange-50"
+                          title="Acceder como este dueño"
+                        >
+                          {impersonatingId === org.owner.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ScanFace className="h-4 w-4" />
+                          )}
+                        </Button>
+
+                        <Button variant="ghost" size="icon" asChild>
+                          <Link href={`/register/${org.slug}`} target="_blank" title="Ver portal del gimnasio">
                             <ExternalLink className="h-4 w-4 text-blue-600" />
                           </Link>
                         </Button>
 
                         <Button 
                           variant="ghost" 
-                          size="sm"
+                          size="icon"
                           onClick={() => handleToggleStatus(org.id, org.isActive)}
                           className={org.isActive ? "text-red-600 hover:text-red-700 hover:bg-red-50" : "text-green-600 hover:text-green-700 hover:bg-green-50"}
+                          title={org.isActive ? "Suspender gimnasio" : "Activar gimnasio"}
                         >
                           {org.isActive ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                         </Button>

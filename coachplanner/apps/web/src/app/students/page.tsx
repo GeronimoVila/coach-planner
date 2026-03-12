@@ -172,9 +172,6 @@ export default function StudentsPage() {
             <p className="text-muted-foreground text-sm">Gestiona los miembros de tu gimnasio</p>
           </div>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm w-full sm:w-auto">
-          <UserPlus className="mr-2 h-4 w-4" /> Registrar Alumno
-        </Button>
       </div>
 
       <div className="max-w-6xl mx-auto w-full space-y-4">

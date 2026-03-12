@@ -64,6 +64,8 @@ export default function SettingsPage() {
   const [addingLink, setAddingLink] = useState(false);
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
 
+  const isProfileEmpty = !userData.fullName?.trim() && !userData.phoneNumber?.trim() && !userData.password?.trim();
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -133,7 +135,9 @@ export default function SettingsPage() {
       toast.success('Perfil actualizado');
       setUserData(prev => ({ ...prev, password: '' }));
     } catch (error: any) {
-      toast.error('Error al actualizar perfil');
+      const msg = error.response?.data?.message;
+      const displayMsg = Array.isArray(msg) ? msg[0] : (msg || 'Error al actualizar perfil');
+      toast.error(displayMsg);
     } finally {
       setSubmitting(false);
     }
@@ -287,7 +291,7 @@ export default function SettingsPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label>Nombre Completo</Label>
-                                <Input required value={userData.fullName} onChange={e => setUserData({...userData, fullName: e.target.value})} />
+                                <Input value={userData.fullName} onChange={e => setUserData({...userData, fullName: e.target.value})} />
                             </div>
                             <div className="space-y-2">
                                 <Label>Número de Celular</Label>
@@ -313,7 +317,7 @@ export default function SettingsPage() {
                                 </div>
                             </div>
                             <div className="flex justify-end pt-2">
-                                <Button type="submit" disabled={submitting}>
+                                <Button type="submit" disabled={submitting || isProfileEmpty}>
                                     {submitting ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />} Guardar
                                 </Button>
                             </div>

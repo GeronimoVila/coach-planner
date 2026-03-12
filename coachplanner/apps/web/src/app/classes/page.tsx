@@ -405,15 +405,6 @@ export default function ClassesPage() {
         <div className="flex items-center gap-1 sm:gap-2">
           {isDesktop && (
               <>
-              <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border mr-2">
-                  <span className="text-xs font-medium text-gray-500">Duración:</span>
-                  <Input 
-                    type="number" 
-                    className="w-14 h-7 text-center px-1 text-sm bg-white"
-                    value={intervalMinutes}
-                    onChange={(e) => handleConfigChange('slotDurationMinutes', Number(e.target.value))}
-                  />
-              </div>
               <Button 
                 variant="outline" 
                 size="sm" 
