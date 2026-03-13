@@ -138,7 +138,12 @@ export default function ClassesPage() {
       return;
     }
     fetchData();
-  }, [user, authLoading, router]);
+    
+  }, [user, authLoading, router, weekStart]); 
+
+  if (authLoading || !user) {
+    return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400" /></div>;
+  }
 
   if (authLoading || !user) {
     return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400" /></div>;
@@ -346,7 +351,8 @@ export default function ClassesPage() {
 
   const handleCloneWeek = async () => {
     const nextWeekStart = addDays(weekStart, 7);
-    const message = `¿Quieres copiar todas las clases de esta semana (${weekStart.toLocaleDateString()}) a la SIGUIENTE semana (${nextWeekStart.toLocaleDateString()})?`;
+    const message = `¿Quieres copiar las clases de esta semana (${weekStart.toLocaleDateString()}) a la SIGUIENTE semana (${nextWeekStart.toLocaleDateString()})?\n\nLas clases que ya existan en la próxima semana no se sobrescribirán.`;
+    
     if (!confirm(message)) return;
     const toastId = toast.loading('Clonando semana...');
     try {
@@ -355,13 +361,22 @@ export default function ClassesPage() {
         targetWeekStart: nextWeekStart.toISOString()
       });
       toast.dismiss(toastId);
-      if (res.data.count === 0) toast.info('No hay clases para clonar en esta semana.');
-      else {
-         toast.success(`¡Éxito! Se clonaron ${res.data.count} clases.`);
-         setWeekStart(nextWeekStart);
+      
+      if (res.data.count === 0 && res.data.skipped === 0) {
+          toast.info('No hay clases para clonar en esta semana.');
+      } else if (res.data.count === 0 && res.data.skipped > 0) {
+          toast.info(`No se clonó ninguna clase. Se omitieron ${res.data.skipped} clases porque ya existían en la próxima semana.`);
+          setWeekStart(nextWeekStart);
+      } else {
+          let successMsg = `¡Éxito! Se clonaron ${res.data.count} clases nuevas.`;
+          if (res.data.skipped > 0) {
+              successMsg += ` (Se omitieron ${res.data.skipped} que ya existían).`;
+          }
+          toast.success(successMsg);
+          setWeekStart(nextWeekStart);
       }
     } catch (err: any) {
-      toast.dismiss(); 
+      toast.dismiss(toastId); 
       if (err.response?.data?.message?.includes('Límite de clases')) openUpgradeModal();
       else toast.error('Error al intentar clonar la semana');
     }
