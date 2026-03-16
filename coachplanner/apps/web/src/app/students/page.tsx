@@ -125,6 +125,23 @@ export default function StudentsPage() {
     }
   };
 
+  const handleToggleStatus = async (student: Student) => {
+    const newStatus = student.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+    const originalStudents = [...students];
+    
+    setStudents(prev => prev.map(s => 
+        s.id === student.id ? { ...s, status: newStatus } : s
+    ));
+
+    try {
+        await api.patch(`/students/${student.id}`, { status: newStatus });
+        toast.success(newStatus === 'ACTIVE' ? 'Alumno activado' : 'Alumno pausado manualmente.');
+    } catch (error) {
+        setStudents(originalStudents);
+        toast.error('Error al cambiar el estado del alumno');
+    }
+  };
+
   const handleAssignCredits = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!selectedStudent) return;
@@ -281,10 +298,14 @@ export default function StudentsPage() {
                             <Link href={`/students/${student.id}`} className="font-medium...">
                               {student.fullName?.replace('undefined', '').trim() || 'Sin nombre'}
                             </Link>
-                            {student.status === 'ACTIVE' ? (
+                            {student.status === 'ACTIVE' && (
                                 <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 uppercase tracking-wider">Activo</span>
-                            ) : (
-                                <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">Inactivo</span>
+                            )}
+                            {student.status === 'INACTIVE' && (
+                                <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 uppercase tracking-wider">Inactivo 30d</span>
+                            )}
+                            {student.status === 'SUSPENDED' && (
+                                <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">Pausado</span>
                             )}
                         </div>
                         
@@ -327,14 +348,23 @@ export default function StudentsPage() {
                       {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
                     </div>
 
-                    <div className="col-span-1 w-full flex justify-end">
+                    <div className="col-span-1 w-full flex flex-col md:flex-row gap-2 justify-end">
+                       <Button 
+                          size="sm" 
+                          variant={student.status === 'SUSPENDED' ? "default" : "destructive"}
+                          className="w-full md:w-auto text-xs h-8 px-2"
+                          onClick={() => handleToggleStatus(student)}
+                       >
+                          {student.status === 'SUSPENDED' ? 'Activar' : 'Pausar'}
+                       </Button>
+                       
                        <Button 
                           size="sm" 
                           variant="outline" 
-                          className="w-full md:w-auto gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                          className="w-full md:w-auto gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 h-8 px-2"
                           onClick={() => openCreditModal(student)}
                        >
-                          <span className="md:hidden">Cargar Créditos</span>
+                          <span className="md:hidden">Créditos</span>
                           <span className="hidden md:inline">Cargar</span>
                        </Button>
                     </div>

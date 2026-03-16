@@ -8,6 +8,7 @@ import { Role } from '@repo/database';
 import { CloneWeekDto } from './dto/clone-week.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
 import { ActiveOrganizationGuard } from '../auth/guards/active-organization.guard';
+import { PlanLimitGuard } from '../auth/guards/plan-limit.guard';
 
 @UseGuards(AuthGuard('jwt'), ActiveOrganizationGuard, RolesGuard)
 @Controller('classes')
@@ -16,6 +17,7 @@ export class ClassesController {
 
   @Post()
   @Roles(Role.ADMIN, Role.OWNER, Role.INSTRUCTOR)
+  @UseGuards(PlanLimitGuard)
   create(@Body() createClassDto: CreateClassDto, @Request() req) {
     const orgId = req.user.organizationId || req.user.orgId;
 
@@ -74,6 +76,7 @@ export class ClassesController {
 
   @Post('clone-week')
   @Roles(Role.OWNER, Role.ADMIN)
+  @UseGuards(PlanLimitGuard)
   cloneWeek(@Request() req, @Body() dto: CloneWeekDto) {
     const orgId = req.user.orgId || req.user.organizationId;
     return this.classesService.cloneWeek(orgId, dto);
