@@ -39,6 +39,17 @@ axiosInstance.interceptors.response.use(
       }
     }
 
+    if (statusCode === 403) {
+      const errorMessage = error.response?.data?.message || 'No tienes permiso para realizar esta acción.';
+      
+      toast.error('Acceso Restringido', {
+        description: errorMessage,
+        duration: 5000,
+      });
+
+      return Promise.reject(error);
+    }
+
     if (!statusCode || statusCode >= 500) {
       Sentry.captureException(error);
       toast.error('Error de conexión', {

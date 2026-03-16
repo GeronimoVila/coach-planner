@@ -97,17 +97,40 @@ export default function Sidebar() {
           <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
             {user.role === 'STUDENT' && gyms.length > 0 && (
                 <div className="md:hidden px-3 mb-6">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Mi Gimnasio</p>
-                    <div className={`relative flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 ${isSwitching ? 'opacity-50 pointer-events-none' : ''}`}>
-                        <Building2 className="h-4 w-4 text-blue-600 mr-2 shrink-0" />
+                    <div className="flex justify-between items-center mb-2">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Mi Gimnasio</p>
+                        {gyms.find(g => g.id === user.organizationId)?.isActive === false && (
+                            <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                                SUSPENDIDO
+                            </span>
+                        )}
+                    </div>
+                    <div className={cn(
+                        "relative flex items-center bg-gray-50 border rounded-lg px-3 py-2",
+                        gyms.find(g => g.id === user.organizationId)?.isActive === false ? "border-red-300 bg-red-50" : "border-gray-200",
+                        isSwitching ? 'opacity-50 pointer-events-none' : ''
+                    )}>
+                        <Building2 className={cn(
+                            "h-4 w-4 mr-2 shrink-0", 
+                            gyms.find(g => g.id === user.organizationId)?.isActive === false ? "text-red-500" : "text-blue-600"
+                        )} />
                         <select
                             value={user.organizationId || ''}
                             onChange={handleSwitchGym}
                             disabled={isSwitching}
-                            className="appearance-none bg-transparent border-none text-sm font-bold text-gray-800 pr-6 cursor-pointer focus:outline-none w-full truncate"
+                            className={cn(
+                                "appearance-none bg-transparent border-none text-sm font-bold pr-6 cursor-pointer focus:outline-none w-full truncate",
+                                gyms.find(g => g.id === user.organizationId)?.isActive === false ? "text-red-700" : "text-gray-800"
+                            )}
                         >
                             {gyms.map(g => (
-                                <option key={g.id} value={g.id}>{g.name}</option>
+                                <option 
+                                    key={g.id} 
+                                    value={g.id} 
+                                    disabled={g.isActive === false}
+                                >
+                                    {g.name} {g.isActive === false ? ' ⛔ (Suspendido)' : ''}
+                                </option>
                             ))}
                         </select>
                         {isSwitching ? (

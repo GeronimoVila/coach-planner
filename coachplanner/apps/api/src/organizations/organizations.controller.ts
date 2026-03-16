@@ -8,8 +8,9 @@ import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
 import { AuthService } from 'src/auth/auth.service';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { ActiveOrganizationGuard } from '../auth/guards/active-organization.guard';
 
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AuthGuard('jwt'), ActiveOrganizationGuard, RolesGuard)
 @Controller('organizations')
 export class OrganizationsController {
   constructor(

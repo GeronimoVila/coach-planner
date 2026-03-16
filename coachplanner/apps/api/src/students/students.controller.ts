@@ -7,8 +7,9 @@ import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
+import { ActiveOrganizationGuard } from '../auth/guards/active-organization.guard';
 
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AuthGuard('jwt'), ActiveOrganizationGuard, RolesGuard)
 @Controller('students')
 export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}

@@ -4,9 +4,9 @@ import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '@repo/database';
 import { RolesGuard } from '../auth/roles.guard';
-
+import { ActiveOrganizationGuard } from '../auth/guards/active-organization.guard';
 @Controller('dashboard')
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AuthGuard('jwt'), ActiveOrganizationGuard, RolesGuard)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 

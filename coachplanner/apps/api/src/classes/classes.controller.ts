@@ -7,8 +7,9 @@ import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
 import { CloneWeekDto } from './dto/clone-week.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
+import { ActiveOrganizationGuard } from '../auth/guards/active-organization.guard';
 
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AuthGuard('jwt'), ActiveOrganizationGuard, RolesGuard)
 @Controller('classes')
 export class ClassesController {
   constructor(private readonly classesService: ClassesService) {}
