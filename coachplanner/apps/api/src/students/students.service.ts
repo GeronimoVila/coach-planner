@@ -117,7 +117,7 @@ export class StudentsService {
     });
   }
 
-  async update(userId: string, orgId: string, data: { categoryId?: number | null }) {
+  async update(userId: string, orgId: string, data: { categoryId?: number | null; status?: any }) {
     const membership = await this.db.membership.findUnique({
       where: { userId_organizationId: { userId, organizationId: orgId } }
     });
@@ -127,7 +127,8 @@ export class StudentsService {
     return this.db.membership.update({
       where: { id: membership.id },
       data: {
-        categoryId: data.categoryId
+        categoryId: data.categoryId !== undefined ? data.categoryId : undefined,
+        status: data.status !== undefined ? data.status : undefined,
       }
     });
   }

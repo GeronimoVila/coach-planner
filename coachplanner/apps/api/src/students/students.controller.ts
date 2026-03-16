@@ -7,8 +7,10 @@ import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
+import { ActiveOrganizationGuard } from '../auth/guards/active-organization.guard';
+import { PlanLimitGuard } from '../auth/guards/plan-limit.guard';
 
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AuthGuard('jwt'), ActiveOrganizationGuard, RolesGuard)
 @Controller('students')
 export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}
@@ -27,6 +29,7 @@ export class StudentsController {
 
   @Post()
   @Roles(Role.OWNER, Role.ADMIN, Role.INSTRUCTOR)
+  @UseGuards(PlanLimitGuard)
   create(@Request() req, @Body() body: { email: string; fullName: string }) {
     const orgId = req.user.orgId || req.user.organizationId;
     return this.studentsService.create(body, orgId);
@@ -44,7 +47,7 @@ export class StudentsController {
   update(
     @Request() req, 
     @Param('id') studentId: string, 
-    @Body() body: { categoryId?: number }
+    @Body() body: { categoryId?: number; status?: string }
   ) {
     const orgId = req.user.orgId || req.user.organizationId;
     return this.studentsService.update(studentId, orgId, body);

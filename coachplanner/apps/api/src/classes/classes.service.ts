@@ -306,71 +306,83 @@ export class ClassesService {
   }
 
   async cloneWeek(orgId: string, dto: CloneWeekDto) {
-    await this.plansService.validateCreateClass(orgId, 1);
+    const sourceStart = new Date(dto.sourceWeekStart);
+    const targetStart = new Date(dto.targetWeekStart);
 
-    return this.db.$transaction(async (tx) => {
-      const sourceStart = new Date(dto.sourceWeekStart);
-      const targetStart = new Date(dto.targetWeekStart);
+    const sourceEnd = new Date(sourceStart);
+    sourceEnd.setDate(sourceEnd.getDate() + 7);
 
-      const sourceEnd = new Date(sourceStart);
-      sourceEnd.setDate(sourceEnd.getDate() + 7);
+    const targetEnd = new Date(targetStart);
+    targetEnd.setDate(targetEnd.getDate() + 7);
 
-      const targetEnd = new Date(targetStart);
-      targetEnd.setDate(targetEnd.getDate() + 7);
-
-      const sourceClasses = await tx.classSession.findMany({
-        where: {
-          organizationId: orgId,
-          startTime: {
-            gte: sourceStart,
-            lte: sourceEnd,
-          },
-          isCancelled: false,
+    const sourceClasses = await this.db.classSession.findMany({
+      where: {
+        organizationId: orgId,
+        startTime: {
+          gte: sourceStart,
+          lte: sourceEnd,
         },
-        include: {
-           categories: true
-        }
-      });
-
-      if (sourceClasses.length === 0) {
-        return { count: 0, message: 'No hay clases para clonar en la semana seleccionada.' };
+        isCancelled: false,
+      },
+      include: {
+         categories: true
       }
+    });
 
-      const existingTargetClasses = await tx.classSession.findMany({
-        where: {
-          organizationId: orgId,
-          startTime: {
-            gte: targetStart,
-            lte: targetEnd,
-          },
-          isCancelled: false,
+    if (sourceClasses.length === 0) {
+      return { count: 0, skipped: 0, message: 'No hay clases para clonar en la semana seleccionada.' };
+    }
+
+    const existingTargetClasses = await this.db.classSession.findMany({
+      where: {
+        organizationId: orgId,
+        startTime: {
+          gte: targetStart,
+          lte: targetEnd,
         },
+        isCancelled: false,
+      },
+    });
+
+    const timeDiff = targetStart.getTime() - sourceStart.getTime();
+    
+    const classesToCreate: any[] = [];
+    let skippedCount = 0;
+
+    for (const cls of sourceClasses) {
+      const newStartTime = new Date(cls.startTime.getTime() + timeDiff);
+      const newEndTime = new Date(cls.endTime.getTime() + timeDiff);
+
+      const isOccupied = existingTargetClasses.some((existing) => {
+        return newStartTime < existing.endTime && newEndTime > existing.startTime;
       });
 
-      const timeDiff = targetStart.getTime() - sourceStart.getTime();
-      let createdCount = 0;
-      let skippedCount = 0;
-
-      for (const cls of sourceClasses) {
-        const newStartTime = new Date(cls.startTime.getTime() + timeDiff);
-        const newEndTime = new Date(cls.endTime.getTime() + timeDiff);
-
-        const isOccupied = existingTargetClasses.some((existing) => {
-          return newStartTime < existing.endTime && newEndTime > existing.startTime;
+      if (isOccupied) {
+        skippedCount++;
+      } else {
+        classesToCreate.push({
+          ...cls,
+          newStartTime,
+          newEndTime
         });
+      }
+    }
 
-        if (isOccupied) {
-          skippedCount++;
-          continue;
-        }
+    if (classesToCreate.length === 0) {
+       return { count: 0, skipped: skippedCount, message: 'Todas las clases ya existían en la semana destino.' };
+    }
 
+    await this.plansService.validateCreateClass(orgId, classesToCreate.length);
+
+    await this.db.$transaction(async (tx) => {
+      for (const cls of classesToCreate) {
         await tx.classSession.create({
           data: {
             organizationId: orgId,
             title: cls.title,
             description: cls.description,
-            startTime: newStartTime,
-            endTime: newEndTime,
+            startTime: cls.newStartTime,
+            endTime: cls.newEndTime,
             capacity: cls.capacity,
             instructorId: cls.instructorId,
             isCancelled: false,
@@ -379,19 +391,18 @@ export class ClassesService {
             }
           }
         });
-        createdCount++;
       }
-
-      let message = `Se clonaron ${createdCount} clases exitosamente.`;
-      if (skippedCount > 0) {
-        message += ` Se omitieron ${skippedCount} clases por coincidir con horarios ya ocupados.`;
-      }
-
-      return { 
-        count: createdCount, 
-        skipped: skippedCount,
-        message: message
-      };
     });
+
+    let message = `Se clonaron ${classesToCreate.length} clases nuevas.`;
+    if (skippedCount > 0) {
+      message += ` Se omitieron ${skippedCount} que ya existían.`;
+    }
+
+    return { 
+      count: classesToCreate.length, 
+      skipped: skippedCount,
+      message: message
+    };
   }
 }

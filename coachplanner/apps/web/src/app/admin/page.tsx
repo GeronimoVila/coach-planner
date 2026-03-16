@@ -265,7 +265,7 @@ export default function AdminDashboardPage() {
                           <Input 
                               type="number" 
                               value={limits.maxStudents} 
-                              onChange={(e) => setLimits({...limits, maxStudents: Number(e.target.value)})}
+                              onChange={(e) => setLimits({...limits, maxStudents: e.target.value === '' ? '' : Number(e.target.value)} as any)}
                           />
                       </div>
                       <div className="space-y-1">
@@ -273,7 +273,7 @@ export default function AdminDashboardPage() {
                           <Input 
                               type="number" 
                               value={limits.maxClasses} 
-                              onChange={(e) => setLimits({...limits, maxClasses: Number(e.target.value)})}
+                              onChange={(e) => setLimits({...limits, maxClasses: e.target.value === '' ? '' : Number(e.target.value)} as any)}
                           />
                       </div>
                       <div className="space-y-1">
@@ -281,7 +281,7 @@ export default function AdminDashboardPage() {
                           <Input 
                               type="number" 
                               value={limits.maxCategories} 
-                              onChange={(e) => setLimits({...limits, maxCategories: Number(e.target.value)})}
+                              onChange={(e) => setLimits({...limits, maxCategories: e.target.value === '' ? '' : Number(e.target.value)} as any)}
                           />
                       </div>
                   </div>

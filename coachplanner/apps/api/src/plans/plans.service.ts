@@ -131,4 +131,44 @@ export class PlansService implements OnModuleInit {
 
     return true;
   }
+
+  async checkIfOverLimit(organizationId: string): Promise<boolean> {
+    const org = await this.db.organization.findUnique({
+      where: { id: organizationId },
+      select: { plan: true },
+    });
+
+    if (!org) return false;
+
+    if (org.plan === PlanType.PRO) return false;
+
+    const limits = await this.db.planLimits.findUnique({ where: { plan: PlanType.FREE } });
+    if (!limits) return false;
+
+    const activeStudents = await this.db.membership.count({
+      where: { 
+        organizationId, 
+        role: Role.STUDENT,
+        status: 'ACTIVE'
+      }, 
+    });
+
+    const activeFutureClasses = await this.db.classSession.count({
+      where: {
+          organizationId,
+          startTime: { gt: new Date() },
+          isCancelled: false
+      }
+    });
+
+    const activeCategories = await this.db.category.count({
+      where: { organizationId, isActive: true }
+    });
+
+    return (
+      activeStudents > limits.maxStudents ||
+      activeFutureClasses > limits.maxClasses ||
+      activeCategories > limits.maxCategories
+    );
+  }
 }

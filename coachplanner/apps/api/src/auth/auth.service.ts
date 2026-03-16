@@ -501,12 +501,12 @@ export class AuthService {
   async getMyGyms(userId: string) {
     const ownedOrgs = await this.db.organization.findMany({
       where: { ownerId: userId },
-      select: { id: true, name: true, slug: true }
+      select: { id: true, name: true, slug: true, isActive: true } 
     });
 
     const memberships = await this.db.membership.findMany({
       where: { userId },
-      include: { organization: { select: { id: true, name: true, slug: true } } }
+      include: { organization: { select: { id: true, name: true, slug: true, isActive: true } } } 
     });
 
     const memberOrgs = memberships.map(m => m.organization);
@@ -556,7 +556,6 @@ export class AuthService {
             primaryRole = Role.OWNER;
             orgId = ownedOrg.id;
             plan = ownedOrg.plan || 'FREE';
-            if (!ownedOrg.isActive) throw new UnauthorizedException('Tu gimnasio ha sido suspendido.');
         } else if (membership) {
             primaryRole = membership.role;
             orgId = membership.organizationId;
@@ -574,11 +573,6 @@ export class AuthService {
           primaryRole = Role.OWNER;
           orgId = user.organizationsOwned[0].id;
           plan = user.organizationsOwned[0].plan || 'FREE';
-          
-          const ownedOrg = user.organizationsOwned[0];
-          if (ownedOrg && !ownedOrg.isActive) {
-            throw new UnauthorizedException('Tu gimnasio ha sido suspendido. Contacta a soporte.');
-          }
         } else if (user.memberships && user.memberships.length > 0) {
           primaryRole = user.memberships[0].role;
           orgId = user.memberships[0].organizationId;

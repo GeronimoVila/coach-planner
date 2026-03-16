@@ -112,7 +112,14 @@ export class OrganizationsService {
 
     if (existingUser && existingUser.memberships.length > 0) {
       const currentRole = existingUser.memberships[0].role;
-      throw new BadRequestException(`Este usuario ya pertenece a la organización con el rol de ${currentRole}`);
+      
+      if (currentRole === dto.role) {
+        throw new BadRequestException(`El usuario ya pertenece a la organización con el rol de ${currentRole}`);
+      }
+
+      if (currentRole === Role.OWNER) {
+        throw new BadRequestException('No puedes modificar el rol del dueño de la organización');
+      }
     }
 
     const token = uuidv4();

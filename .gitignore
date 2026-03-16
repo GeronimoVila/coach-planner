@@ -1,0 +1,49 @@
+# dependencias
+node_modules/
+.pnpm-workspace-state.json
+.pnpm-workspace-state-v1.json
+
+# compilaciones y builds
+dist/
+.next/
+out/
+build/
+.turbo/
+
+# archivos de log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# variables de entorno (NUNCA SUBIR LAS REALES)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+
+# base de datos local (si usaras SQLite, para no subirla)
+*.sqlite
+*.db
+*.db-journal
+
+# Prisma
+packages/database/prisma/dev.db
+
+# archivos del sistema operativo
+.DS_Store
+*.swp
+Thumbs.db
+
+# caché de herramientas
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# reportes de cobertura de tests
+coverage/
+
+# Vercel / despliegue
+.vercel/

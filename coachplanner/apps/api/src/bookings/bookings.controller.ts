@@ -5,14 +5,17 @@ import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { Role } from '@repo/database';
+import { ActiveOrganizationGuard } from '../auth/guards/active-organization.guard';
+import { PlanLimitGuard } from '../auth/guards/plan-limit.guard';
 
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(AuthGuard('jwt'), ActiveOrganizationGuard, RolesGuard)
 @Controller('bookings')
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
   @Post()
   @Roles(Role.STUDENT)
+  @UseGuards(PlanLimitGuard)
   create(@Request() req, @Body() createBookingDto: CreateBookingDto) {
     const userId = req.user.id || req.user.userId;
     const orgId = req.user.orgId || req.user.organizationId;

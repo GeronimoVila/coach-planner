@@ -12,8 +12,21 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get('users')
-  getUsers(@Query('q') q?: string) {
-    return this.adminService.getUsers(q);
+  @Roles(Role.ADMIN)
+  async getUsers(
+    @Query('q') query?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('role') role?: string,
+    @Query('status') status?: string
+  ) {
+    return this.adminService.getUsers(
+      query, 
+      page ? Number(page) : 1, 
+      limit ? Number(limit) : 10,
+      role,
+      status
+    );
   }
 
   @Get('users/:id')
@@ -24,8 +37,21 @@ export class AdminController {
   }
 
   @Get('organizations')
-  getOrganizations() {
-    return this.adminService.getOrganizations();
+  @Roles(Role.ADMIN)
+  async getOrganizations(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('plan') plan?: string
+  ) {
+    return this.adminService.getOrganizations(
+      page ? Number(page) : 1, 
+      limit ? Number(limit) : 10,
+      search,
+      status,
+      plan
+    );
   }
 
   @Patch('organizations/:id/status')

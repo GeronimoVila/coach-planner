@@ -55,12 +55,21 @@ export default function StudentsPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'INSTRUCTOR')) {
-      router.push('/');
+    if (!user) {
+      router.push('/login');
       return;
     }
+    if (user.role !== 'OWNER' && user.role !== 'ADMIN' && user.role !== 'INSTRUCTOR') {
+      toast.error('Acceso denegado. Solo el personal del gimnasio puede ver esta sección.');
+      router.push('/');
+      return;
+    }  
     fetchData();
   }, [user, authLoading, router]);
+
+  if (authLoading || !user) {
+    return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-gray-400" /></div>;
+  }
 
   const fetchData = async () => {
     setLoading(true);
@@ -113,6 +122,23 @@ export default function StudentsPage() {
     } catch (error) {
         setStudents(originalStudents);
         toast.error('Error al actualizar categoría');
+    }
+  };
+
+  const handleToggleStatus = async (student: Student) => {
+    const newStatus = student.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+    const originalStudents = [...students];
+    
+    setStudents(prev => prev.map(s => 
+        s.id === student.id ? { ...s, status: newStatus } : s
+    ));
+
+    try {
+        await api.patch(`/students/${student.id}`, { status: newStatus });
+        toast.success(newStatus === 'ACTIVE' ? 'Alumno activado' : 'Alumno pausado manualmente.');
+    } catch (error) {
+        setStudents(originalStudents);
+        toast.error('Error al cambiar el estado del alumno');
     }
   };
 
@@ -172,9 +198,6 @@ export default function StudentsPage() {
             <p className="text-muted-foreground text-sm">Gestiona los miembros de tu gimnasio</p>
           </div>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm w-full sm:w-auto">
-          <UserPlus className="mr-2 h-4 w-4" /> Registrar Alumno
-        </Button>
       </div>
 
       <div className="max-w-6xl mx-auto w-full space-y-4">
@@ -275,10 +298,14 @@ export default function StudentsPage() {
                             <Link href={`/students/${student.id}`} className="font-medium...">
                               {student.fullName?.replace('undefined', '').trim() || 'Sin nombre'}
                             </Link>
-                            {student.status === 'ACTIVE' ? (
+                            {student.status === 'ACTIVE' && (
                                 <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 uppercase tracking-wider">Activo</span>
-                            ) : (
-                                <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">Inactivo</span>
+                            )}
+                            {student.status === 'INACTIVE' && (
+                                <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 uppercase tracking-wider">Inactivo 30d</span>
+                            )}
+                            {student.status === 'SUSPENDED' && (
+                                <span className="hidden md:inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider">Pausado</span>
                             )}
                         </div>
                         
@@ -321,14 +348,23 @@ export default function StudentsPage() {
                       {new Date(student.joinedAt).toLocaleDateString('es-ES', { dateStyle: 'medium' })}
                     </div>
 
-                    <div className="col-span-1 w-full flex justify-end">
+                    <div className="col-span-1 w-full flex flex-col md:flex-row gap-2 justify-end">
+                       <Button 
+                          size="sm" 
+                          variant={student.status === 'SUSPENDED' ? "default" : "destructive"}
+                          className="w-full md:w-auto text-xs h-8 px-2"
+                          onClick={() => handleToggleStatus(student)}
+                       >
+                          {student.status === 'SUSPENDED' ? 'Activar' : 'Pausar'}
+                       </Button>
+                       
                        <Button 
                           size="sm" 
                           variant="outline" 
-                          className="w-full md:w-auto gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                          className="w-full md:w-auto gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800 h-8 px-2"
                           onClick={() => openCreditModal(student)}
                        >
-                          <span className="md:hidden">Cargar Créditos</span>
+                          <span className="md:hidden">Créditos</span>
                           <span className="hidden md:inline">Cargar</span>
                        </Button>
                     </div>
@@ -433,10 +469,13 @@ export default function StudentsPage() {
                             required 
                             className="pl-9"
                             value={creditForm.amount || ''}
-                            onChange={e => setCreditForm({
+                            onChange={e => {
+                              const val = e.target.value;
+                              setCreditForm({
                                 ...creditForm, 
-                                amount: e.target.value === '' ? 0 : parseInt(e.target.value)
-                            })}
+                                amount: val === '' ? '' : parseInt(val)
+                              } as any);
+                          }}
                         />
                     </div>
                     </div>
@@ -452,8 +491,8 @@ export default function StudentsPage() {
                             value={creditForm.daysValid || ''}
                             onChange={e => setCreditForm({
                                 ...creditForm, 
-                                daysValid: e.target.value === '' ? 0 : parseInt(e.target.value)
-                            })}
+                                daysValid: e.target.value === '' ? '' : parseInt(e.target.value)
+                            } as any)}
                         />
                     </div>
                     </div>
